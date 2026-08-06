@@ -140,6 +140,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.kiken{background:var(--terra)}
 .badge.tokutei{background:var(--terra);}
 .badge.ord{background:var(--bark)}
+.badge.fdma{background:var(--sage)}
 
 /* ---------- 条文カード ---------- */
 .art{
@@ -388,6 +389,17 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       </div>
 
       <div class="card">
+        <h3>消防庁の通知・標準マニュアル</h3>
+        <div id="fdma-status" class="muted"></div>
+        <div class="disclaimer">
+          出典：消防庁ホームページ（<a href="https://www.fdma.go.jp/" target="_blank" rel="noopener">https://www.fdma.go.jp/</a>）。
+          <strong>本アプリの作成者がPDFからページ単位でテキストを抽出して再構成したもの</strong>であり、
+          内容について消防庁が保証したものではありません。マニュアルは改正されるため、
+          必ず原典PDFで最新版をご確認ください。
+        </div>
+      </div>
+
+      <div class="card">
         <h3>AI解説（Claude API・任意）</h3>
         <div class="muted">
           APIキーを登録すると、検索結果に平易な解説を付けられます。未登録でも検索・条文表示は
@@ -490,6 +502,9 @@ async function boot(){
     DB.findings = await getJSON('data/findings_map.json');
     DB.ords = await getJSON('data/ordinances.json').catch(() => null);
 
+    setProgress(88, '消防庁の通知・マニュアルを読み込み中…');
+    DB.fdma = await getJSON('data/fdma.json').catch(() => null);
+
     setProgress(92, '検索用の索引を作成中…');
     buildIndex();
 
@@ -554,6 +569,7 @@ function buildIndex(){
   }
 
   buildOrdinanceIndex();
+  buildFdmaIndex();
 
   // 辞書：指摘辞書のキーワード＋用途名＋条見出しの語
   const dict = new Set();
@@ -591,6 +607,44 @@ function buildOrdinanceIndex(){
         num: parseArticleNumber(a.title)
       });
     }
+  }
+}
+
+/* 消防庁の標準マニュアル（ページ単位）と通知・通達（書誌）を検索対象に加える。
+   マニュアルは原典PDFの該当ページへ直接リンクする（#page=N）。 */
+function buildFdmaIndex(){
+  if (!DB.fdma) return;
+
+  for (const doc of DB.fdma.documents || []){
+    for (const p of doc.pages || []){
+      DB.articles.push({
+        lawId: 'fdma:' + doc.id, lawTitle: doc.title, short: '消防庁',
+        isFdma: true, kind: 'マニュアル',
+        noticeNo: doc.notice_no, noticeDate: doc.date,
+        enforcement: '', fetched: DB.fdma.fetched_at, sourceUrl: doc.url,
+        title: 'P.' + p.page, caption: p.heading || '',
+        crumbs: [doc.notice_no + '（' + doc.date + '改正）'],
+        url: doc.url + '#page=' + p.page,
+        paras: [{ num: '1', text: p.text }],
+        nTitle: normalize(doc.title + ' P.' + p.page),
+        nCaption: normalize(p.heading || ''), nCrumbs: '',
+        nBody: normalize(p.text), num: null
+      });
+    }
+  }
+
+  for (const n of DB.fdma.notices || []){
+    DB.articles.push({
+      lawId: 'fdma:notice', lawTitle: '消防庁', short: '通知',
+      isFdma: true, kind: '通知', noBody: true,
+      noticeNo: n.no, noticeDate: n.date,
+      enforcement: '', fetched: DB.fdma.fetched_at, sourceUrl: n.url,
+      title: n.no || n.kind || '通知', caption: n.title,
+      crumbs: n.date ? [n.date] : [],
+      url: n.url, paras: [],
+      nTitle: normalize(n.no || ''), nCaption: normalize(n.title),
+      nCrumbs: '', nBody: normalize(n.title), num: null
+    });
   }
 }
 
@@ -743,6 +797,7 @@ function badgeClass(short){
   if (short === '規則') return 'rule';
   if (short === '危政令') return 'kiken';
   if (short === '条例') return 'ord';
+  if (short === '通知' || short === '消防庁') return 'fdma';
   return 'kenchiku';
 }
 function fmtDate(iso){ return (iso || '').slice(0, 10); }
@@ -763,6 +818,22 @@ function renderArticle(a, point){
     }
     body += '</div>';
   }
+  let foot;
+  if (a.isOrd){
+    foot = '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
+           '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>';
+  } else if (a.isFdma){
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">消防庁の原典PDFを開く ↗</a>' +
+           '<span class="fresh">出典：消防庁' +
+           (a.noticeDate ? '／' + esc(a.noticeDate) : '') +
+           '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
+  } else {
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+           '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
+  }
+
+  const bodyLabel = a.isFdma ? '本文を表示 ▾' : '条文を表示 ▾';
+
   return '' +
   '<div class="art">' +
     '<div class="head"><div>' +
@@ -772,15 +843,11 @@ function renderArticle(a, point){
       (a.crumbs.length ? '<div class="crumbs">' + esc(a.crumbs.join(' ＞ ')) + '</div>' : '') +
       (point ? '<div class="point">▸ ' + esc(point) + '</div>' : '') +
     '</div></div>' +
-    '<button class="toggle-body no-print" onclick="toggleBody(\'' + id + '\',this)">条文を表示 ▾</button>' +
-    '<div class="body" id="' + id + '">' + body + '</div>' +
-    '<div class="foot">' +
-      (a.isOrd
-        ? '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
-          '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>'
-        : '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
-          '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>') +
-    '</div>' +
+    (a.noBody
+      ? '<div class="muted" style="margin-top:6px">本文は収録していません。原典PDFでご確認ください。</div>'
+      : '<button class="toggle-body no-print" onclick="toggleBody(\'' + id + '\',this)">' + bodyLabel + '</button>' +
+        '<div class="body" id="' + id + '">' + body + '</div>') +
+    '<div class="foot">' + foot + '</div>' +
   '</div>';
 }
 
@@ -879,6 +946,10 @@ function runShiteki(){
         const ordHits = ordinanceHitsFor(e, raw);
         for (const oa of ordHits) html += renderArticle(oa, '条例側の該当箇所（候補）');
       }
+      const manHits = manualHitsFor(e, raw);
+      for (const ma of manHits){
+        html += renderArticle(ma, (e.category === '執行手続き' ? '違反処理' : '立入検査') + 'の進め方（候補）');
+      }
       html += '</div>';
     });
   }
@@ -904,6 +975,33 @@ function runShiteki(){
   box.innerHTML = html;
   state.lastResult = { raw, entries: scored.map(x => x.e), yoto, extra: rest.map(r => r.art) };
   window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+/* 指摘の種類に応じて、参照すべき標準マニュアルのページを拾う。
+   執行手続きなら違反処理標準マニュアル、それ以外は立入検査標準マニュアル。 */
+function manualHitsFor(entry, raw){
+  if (!DB.fdma) return [];
+  const wantIhan = entry.category === '執行手続き';
+  const docId = wantIhan ? 'fdma:manual_ihan' : 'fdma:manual_tachiiri';
+  const pages = DB.articles.filter(a => a.lawId === docId);
+  if (!pages.length) return [];
+
+  const terms = [...new Set(entry.keywords.concat(extractTerms(raw)).map(normalize))]
+    .filter(t => t.length >= 2);
+  if (!terms.length) return [];
+
+  const scored = [];
+  for (const a of pages){
+    let s = 0, matched = 0;
+    for (const t of terms){
+      const hits = countOccurrences(a.nBody, t, 3);
+      if (hits){ s += Math.min(t.length, 6) * (1 + hits * 0.4); matched++; }
+      if (a.nCaption.includes(t)) s += t.length * 2;
+    }
+    if (matched >= 2) scored.push({ a, s: s * (1 + (matched - 1) * 0.4) });
+  }
+  scored.sort((x, y) => y.s - x.s);
+  return scored.slice(0, 2).map(x => x.a);
 }
 
 /* 条例に基準が委任されている指摘について、条例側の候補条文を拾う */
@@ -997,6 +1095,16 @@ function renderLawChips(){
   for (const ord of (DB.ords && DB.ords.ordinances) || []){
     const id = 'ord:' + ord.id;
     html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">条例</button>';
+  }
+  if (DB.fdma){
+    for (const doc of DB.fdma.documents || []){
+      const id = 'fdma:' + doc.id;
+      const lbl = doc.title.includes('立入検査') ? '立入検査M' : '違反処理M';
+      html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">' + lbl + '</button>';
+    }
+    if ((DB.fdma.notices || []).length){
+      html += '<button class="chip" data-law="fdma:notice" onclick="toggleLawFilter(\'fdma:notice\')">通知</button>';
+    }
   }
   wrap.innerHTML = html;
 }
@@ -1648,6 +1756,8 @@ function renderFreshness(){
     '</div>').join('') +
     '<div class="muted" style="margin-top:8px">最終取得日：' + esc(fmtDate(DB.index.fetched_at)) + '</div>';
 
+  renderFdmaStatus();
+
   const os = document.getElementById('ord-status');
   const ords = (DB.ords && DB.ords.ordinances) || [];
   if (!ords.length){
@@ -1665,6 +1775,29 @@ function renderFreshness(){
     '</div>').join('') +
     '<div class="muted" style="margin-top:6px">附則の経過措置は含めていません。取り込み日：' +
     esc(fmtDate(DB.ords.generated_at)) + '</div>';
+}
+
+function renderFdmaStatus(){
+  const el = document.getElementById('fdma-status');
+  if (!el) return;
+  if (!DB.fdma){
+    el.textContent = '消防庁のデータはまだ入っていません。';
+    return;
+  }
+  const docs = DB.fdma.documents || [];
+  const notices = DB.fdma.notices || [];
+  el.innerHTML = docs.map(d =>
+    '<div style="margin:7px 0;font-size:13px">' +
+      '<span class="badge fdma">' + (d.title.includes('立入検査') ? '立入検査' : '違反処理') + '</span>' +
+      esc(d.title) +
+      '<div class="muted">' + esc(d.notice_no) + '（' + esc(d.date) + '改正）／全文 ' +
+      d.page_count + 'ページを収録</div>' +
+    '</div>').join('') +
+    '<div style="margin:7px 0;font-size:13px">' +
+      '<span class="badge fdma">通知</span>予防関係の通知・通達 ' + notices.length + '件' +
+      '<div class="muted">件名・番号・日付で検索できます（本文は未収録。リンクから原典PDFへ）</div>' +
+    '</div>' +
+    '<div class="muted" style="margin-top:6px">取得日：' + esc(fmtDate(DB.fdma.fetched_at)) + '</div>';
 }
 
 function initUI(){

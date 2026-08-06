@@ -3,7 +3,7 @@
 """
 公開（public化）の前に、リポジトリに入るファイルへ識別情報が混ざっていないか点検する。
 
-  使い方:  python scripts/check_publish_safety.py [--names 旭市,千葉県]
+  使い方:  python scripts/check_publish_safety.py [--names ○○市,○○県]
 
 査察メモは端末の localStorage にしか無いのでリポジトリには入らないが、
 findings_map.json に実務メモを書き足すと公開される。そこを主に見る。
@@ -35,12 +35,21 @@ MUNI_SAFE = {
 
 SKIP_DIRS = {'.git', 'icons', '__pycache__', 'node_modules'}
 # e-Gov 由来の法令データは国の公開データなので対象外
-SKIP_FILES = {'data/laws_index.json'}
+# 消防庁由来のデータも国の公開コンテンツなので対象外
+SKIP_FILES = {'data/laws_index.json', 'data/fdma.json'}
 
 # コード類は検知パターンそのものを含むため、一般パターンでの走査対象にしない。
 # （指定された自治体名が埋め込まれていないかだけは全ファイルで見る）
 CODE_SUFFIXES = {'.py', '.js', '.html', '.json'}
 CONTENT_FILES = {'README.md', 'data/findings_map.json', 'data/ordinances.json'}
+
+
+# README で機能そのものを説明するために出てくる語。検知例なので実データではない。
+DOC_EXAMPLES = {
+    '当本部', '当署', '当市', '当町', '当村', '本市', '本町', '本村',
+    '内規', '申し合わせ', '申合せ', '運用指針', '運用基準', '事務処理要領',
+    '事務処理基準', '査察規程', '事案番号', '受理番号', '整理番号', '台帳番号',
+}
 
 
 def is_content_file(rel):
@@ -111,6 +120,9 @@ def main():
         # 匿名化済みの条例は、マスク語そのものが出るのは正常
         if rel == 'data/ordinances.json':
             findings = [f for f in findings if '非表示' not in f[0]]
+        # README は機能説明のために検知例そのものを載せている
+        if rel == 'README.md':
+            findings = [f for f in findings if f[0] not in DOC_EXAMPLES]
 
         if findings:
             total += len(findings)

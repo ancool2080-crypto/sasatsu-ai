@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# 消防庁PDFの取得キャッシュ（再取得できるので同梱しない）
+data/fdma_cache/
