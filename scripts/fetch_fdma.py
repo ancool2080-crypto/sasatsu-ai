@@ -50,7 +50,23 @@ EXCLUDE_HINTS = [
     "訓練礼式", "無線", "統計", "白書", "建築費指数", "予防技術検定",
 ]
 
-# 本文まで収録する文書。改正のたびにここのURLを差し替える。
+# 通知のうち本文まで収録するもの。件名で選ぶので、再実行すれば新しい執務資料も自動で入る。
+# 執務資料は消防庁が出す質疑応答集で、実務の判断根拠として使う頻度が高い。
+FULL_TEXT_RULES = [
+    {
+        "kind": "執務資料",
+        "include": r"執務資料",
+        "exclude": r"事故に関する",
+    },
+    {
+        "kind": "ガイドライン",
+        "include": r"ガイドライン",
+        "exclude": r"避難場所|福祉避難所|個人防火装備|講習|リーフレット|情報提供|活用等|事例について",
+    },
+]
+MAX_PDF_BYTES = 15 * 1024 * 1024      # これより大きいPDFは本文収録しない
+
+# 常に本文を収録する文書。改正のたびにここのURLを差し替える。
 FULL_TEXT_DOCS = [
     {
         "id": "manual_tachiiri",
@@ -166,11 +182,22 @@ def extract_pdf_pages(path):
     import pdfplumber
 
     heading_re = re.compile(r"^第[0-9０-９一二三四五六七八九十]+\s*[　 ]?\S{2,30}$")
-    pages, current_heading = [], ""
+    # 埋め込みフォントにUnicodeの対応表が無いPDFは (cid:1608) のような置換文字が並ぶ。
+    # 検索の役に立たないどころか索引を汚すので、そういうページは捨てる。
+    cid_re = re.compile(r"\(cid:\d+\)")
+    pages, current_heading, unreadable = [], "", 0
 
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             raw = page.extract_text() or ""
+
+            if raw:
+                stripped = cid_re.sub("", raw)
+                if len(stripped) < len(raw) * 0.6:
+                    unreadable += 1
+                    continue
+                raw = stripped
+
             raw_lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
 
             # 目次は「・・・」でページ番号に繋ぐ行が並ぶ。見出し語を全部含むため
@@ -190,27 +217,75 @@ def extract_pdf_pages(path):
             if is_toc:
                 entry["toc"] = True
             pages.append(entry)
+
+    if unreadable:
+        print("    （文字を取り出せないページ {} を除外）".format(unreadable))
     return pages
 
 
-def fetch_full_texts(root):
+def select_full_text_notices(notices):
+    """件名のルールに当てはまる通知を本文収録の対象として拾う。"""
+    specs = []
+    seen = set()
+    for rule in FULL_TEXT_RULES:
+        inc = re.compile(rule["include"])
+        exc = re.compile(rule["exclude"]) if rule.get("exclude") else None
+        for n in notices:
+            if not inc.search(n["title"]):
+                continue
+            if exc and exc.search(n["title"]):
+                continue
+            if n["url"] in seen:
+                continue
+            seen.add(n["url"])
+            slug = re.sub(r"[^0-9a-zA-Z]", "", (n["no"] or n["kind"]) + (n["date"] or ""))
+            specs.append({
+                "id": "doc_" + (slug or str(len(specs))),
+                "kind": rule["kind"],
+                "title": n["title"],
+                "notice_no": n["no"],
+                "date": n["date"],
+                "url": n["url"],
+                "note": "消防庁の{}。原典PDFで最新版を確認すること。".format(rule["kind"]),
+            })
+    specs.sort(key=lambda s: s["date"] or "", reverse=True)
+    return specs
+
+
+def fetch_full_texts(root, specs):
     cache = root / "data" / "fdma_cache"
     cache.mkdir(parents=True, exist_ok=True)
     docs = []
 
-    for i, spec in enumerate(FULL_TEXT_DOCS):
+    for i, spec in enumerate(specs):
         if i:
             time.sleep(INTERVAL)
         name = spec["url"].rsplit("/", 1)[-1]
         pdf_path = cache / name
         if not pdf_path.exists():
-            print("  取得中: {} …".format(spec["title"]), flush=True)
-            pdf_path.write_bytes(fetch(spec["url"], binary=True))
+            print("  取得中: {} …".format(spec["title"][:44]), flush=True)
+            try:
+                data = fetch(spec["url"], binary=True)
+            except Exception as exc:                       # noqa: BLE001
+                print("    ! 取得できません: {}".format(exc), file=sys.stderr)
+                continue
+            if len(data) > MAX_PDF_BYTES:
+                print("    - 大きすぎるため本文収録は見送り（{:.1f} MB）".format(len(data) / 1024 / 1024))
+                continue
+            pdf_path.write_bytes(data)
         else:
-            print("  キャッシュ利用: {}".format(spec["title"]))
+            print("  キャッシュ利用: {}".format(spec["title"][:44]))
 
-        pages = extract_pdf_pages(pdf_path)
+        try:
+            pages = extract_pdf_pages(pdf_path)
+        except Exception as exc:                           # noqa: BLE001
+            print("    ! テキスト抽出に失敗: {}".format(exc), file=sys.stderr)
+            continue
+
         chars = sum(len(p["text"]) for p in pages)
+        if not chars:
+            print("    - 文字が取れなかったため見送り（画像PDFの可能性）")
+            continue
         print("    {} ページ / {:,} 文字".format(len(pages), chars))
 
         doc = dict(spec)
@@ -235,7 +310,11 @@ def main():
     docs = []
     if not args.index_only:
         print("\n標準マニュアルの本文を取得します")
-        docs = fetch_full_texts(root)
+        docs = fetch_full_texts(root, FULL_TEXT_DOCS)
+
+        picked = select_full_text_notices(notices)
+        print("\n執務資料・ガイドラインの本文を取得します（{} 件）".format(len(picked)))
+        docs += fetch_full_texts(root, picked)
 
     payload = {
         "fetched_at": fetched_at,

@@ -141,6 +141,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.tokutei{background:var(--terra);}
 .badge.ord{background:var(--bark)}
 .badge.fdma{background:var(--sage)}
+.badge.note{background:var(--ochre)}
 
 /* ---------- 防火管理者・執行手続き ---------- */
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -341,6 +342,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
     <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><span class="ico">📖</span>条文検索</button>
     <button class="nav-tab" data-mod="boka" onclick="showModule('boka')"><span class="ico">👤</span>防火管理者</button>
     <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><span class="ico">⚖️</span>執行手続き</button>
+    <button class="nav-tab" data-mod="knowhow" onclick="showModule('knowhow')"><span class="ico">💡</span>ノウハウ</button>
     <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><span class="ico">📝</span>査察メモ</button>
     <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><span class="ico">⚙️</span>設定</button>
   </nav>
@@ -416,6 +418,23 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
         <div id="bk-santei"></div>
       </div>
       <div id="boka-result"></div>
+    </section>
+
+    <!-- ============ ノウハウノート ============ -->
+    <section id="mod-knowhow" class="module">
+      <div class="searchbar">
+        <div class="search-input-wrap">
+          <input type="text" id="q-knowhow" placeholder="ノウハウを検索" oninput="renderKnowhow()">
+        </div>
+        <button class="btn sm" onclick="openKnowhowEditor()">＋ 追加</button>
+      </div>
+      <div class="disclaimer">
+        自分で調べて理解したことを、<strong>自分の言葉で</strong>書き留める場所です。
+        書いた内容は検索結果と「指摘→根拠」にも出ます。<br>
+        市販の書籍や解説書の文章をそのまま書き写さないでください。要点を自分の言葉で整理したものを残す使い方を想定しています。
+        <strong>このノートは端末内にのみ保存され、リポジトリには入りません。</strong>
+      </div>
+      <div id="knowhow-list"></div>
     </section>
 
     <!-- ============ 執行手続きの参照 ============ -->
@@ -699,16 +718,20 @@ function buildOrdinanceIndex(){
 function buildFdmaIndex(){
   if (!DB.fdma) return;
 
+  const FDMA_BADGE = { 'マニュアル': '消防庁', '執務資料': '執務資料', 'ガイドライン': 'ガイド' };
+
   for (const doc of DB.fdma.documents || []){
+    const kind = doc.kind || 'マニュアル';
     for (const p of doc.pages || []){
       if (p.toc) continue;          // 目次は見出し語を全部含むので索引から外す
       DB.articles.push({
-        lawId: 'fdma:' + doc.id, lawTitle: doc.title, short: '消防庁',
-        isFdma: true, kind: 'マニュアル',
+        lawId: 'fdma:' + doc.id, groupId: 'fdmakind:' + kind,
+        lawTitle: doc.title, short: FDMA_BADGE[kind] || '消防庁',
+        isFdma: true, kind: kind,
         noticeNo: doc.notice_no, noticeDate: doc.date,
         enforcement: '', fetched: DB.fdma.fetched_at, sourceUrl: doc.url,
         title: 'P.' + p.page, caption: p.heading || '',
-        crumbs: [doc.notice_no + '（' + doc.date + '改正）'],
+        crumbs: [(doc.notice_no ? doc.notice_no + '　' : '') + (doc.date || '')],
         url: doc.url + '#page=' + p.page,
         paras: [{ num: '1', text: p.text }],
         nTitle: normalize(doc.title + ' P.' + p.page),
@@ -718,7 +741,11 @@ function buildFdmaIndex(){
     }
   }
 
+  // 本文を収録した通知は、書誌だけの項目と二重に出さない
+  const fullTextUrls = new Set((DB.fdma.documents || []).map(d => d.url));
+
   for (const n of DB.fdma.notices || []){
+    if (fullTextUrls.has(n.url)) continue;
     DB.articles.push({
       lawId: 'fdma:notice', lawTitle: '消防庁', short: '通知',
       isFdma: true, kind: '通知', noBody: true,
@@ -847,7 +874,8 @@ function searchArticles(raw, opts){
 
   const out = [];
   for (const a of DB.articles){
-    if (state.lawFilter.size && !state.lawFilter.has(a.lawId)) continue;
+    if (state.lawFilter.size &&
+        !state.lawFilter.has(a.lawId) && !state.lawFilter.has(a.groupId)) continue;
     let score = 0, matched = 0;
     for (const t of terms){
       const w = Math.min(t.length, 6);
@@ -882,7 +910,8 @@ function badgeClass(short){
   if (short === '規則') return 'rule';
   if (short === '危政令') return 'kiken';
   if (short === '条例') return 'ord';
-  if (short === '通知' || short === '消防庁') return 'fdma';
+  if (short === 'ノート') return 'note';
+  if (short === '通知' || short === '消防庁' || short === '執務資料' || short === 'ガイド') return 'fdma';
   return 'kenchiku';
 }
 function fmtDate(iso){ return (iso || '').slice(0, 10); }
@@ -907,6 +936,9 @@ function renderArticle(a, point){
   if (a.isOrd){
     foot = '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
            '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>';
+  } else if (a.isKnowhow){
+    foot = '<span class="fresh">自分のノート（この端末にのみ保存）</span>' +
+           '<span class="fresh">更新 ' + esc(fmtDate(a.fetched)) + '</span>';
   } else if (a.isFdma){
     foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">消防庁の原典PDFを開く ↗</a>' +
            '<span class="fresh">出典：消防庁' +
@@ -1007,7 +1039,11 @@ function runShiteki(){
   if (!scored.length){
     html += '<div class="card"><h3>該当する指摘パターンが見つかりませんでした</h3>' +
       '<div class="muted">辞書に無い指摘のようです。下の条文検索結果を手がかりにしてください。' +
-      'よく使う指摘は data/findings_map.json に追記できます。</div></div>';
+      'よく使う指摘は data/findings_map.json に追記できます。</div>';
+    // 辞書に無くても、自分のノートに書いてあるかもしれない
+    const notes = knowhowHitsFor({ keywords: [], category: '' }, raw);
+    for (const ka of notes) html += renderArticle(ka, '自分のノート');
+    html += '</div>';
   } else {
     const top = scored[0].s;
     scored.forEach((x, i) => {
@@ -1025,6 +1061,8 @@ function runShiteki(){
           '<div class="muted">（未収録：' + esc(ref.law_id) + ' ' + esc(ref.article) + '）</div>';
       }
       if (e.note) html += '<div class="note">💡 ' + esc(e.note) + '</div>';
+      // 自分のノートがあれば条文より先に見せる
+      for (const ka of knowhowHitsFor(e, raw)) html += renderArticle(ka, '自分のノート');
       if (e.ordinance){
         html += '<div class="note">📕 この指摘は火災予防条例に基準が委任されている部分があります。' +
           '所属の条例本文を必ず併せて確認してください。' + ordHint() + '</div>';
@@ -1034,6 +1072,10 @@ function runShiteki(){
       const manHits = manualHitsFor(e, raw);
       for (const ma of manHits){
         html += renderArticle(ma, (e.category === '執行手続き' ? '違反処理' : '立入検査') + 'の進め方（候補）');
+      }
+      const shiryoHits = shirioHitsFor(e, raw);
+      for (const sa of shiryoHits){
+        html += renderArticle(sa, sa.kind + 'の関係箇所（候補）');
       }
       html += '</div>';
     });
@@ -1087,6 +1129,41 @@ function manualHitsFor(entry, raw){
   }
   scored.sort((x, y) => y.s - x.s);
   return scored.slice(0, 2).map(x => x.a);
+}
+
+/* 執務資料（消防庁の質疑応答）とガイドラインから、その指摘に関係しそうな箇所を拾う。
+   条文だけでは判断できない「この場合どう扱うか」に効く。 */
+function shirioHitsFor(entry, raw){
+  const pages = DB.articles.filter(a =>
+    a.isFdma && (a.kind === '執務資料' || a.kind === 'ガイドライン'));
+  if (!pages.length) return [];
+
+  const terms = [...new Set(entry.keywords.concat(extractTerms(raw)).map(normalize))]
+    .filter(t => t.length >= 2);
+  if (!terms.length) return [];
+
+  const scored = [];
+  for (const a of pages){
+    let s = 0, matched = 0;
+    for (const t of terms){
+      const hits = countOccurrences(a.nBody, t, 3);
+      if (hits){ s += Math.min(t.length, 6) * (1 + hits * 0.4); matched++; }
+      if (a.nTitle.includes(t)) s += t.length * 1.5;
+    }
+    if (matched >= 2) scored.push({ a, s: s * (1 + (matched - 1) * 0.5) });
+  }
+  scored.sort((x, y) => y.s - x.s);
+
+  // 同じ資料から何ページも並べても仕方ないので、資料ごとに1ページに絞る
+  const seen = new Set();
+  const out = [];
+  for (const x of scored){
+    if (seen.has(x.a.lawId)) continue;
+    seen.add(x.a.lawId);
+    out.push(x.a);
+    if (out.length >= 2) break;
+  }
+  return out;
 }
 
 /* 条例に基準が委任されている指摘について、条例側の候補条文を拾う */
@@ -1182,10 +1259,17 @@ function renderLawChips(){
     html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">条例</button>';
   }
   if (DB.fdma){
+    // 標準マニュアルは個別に、執務資料・ガイドラインは種別でまとめて絞り込む
     for (const doc of DB.fdma.documents || []){
+      if ((doc.kind || 'マニュアル') !== 'マニュアル') continue;
       const id = 'fdma:' + doc.id;
       const lbl = doc.title.includes('立入検査') ? '立入検査M' : '違反処理M';
       html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">' + lbl + '</button>';
+    }
+    for (const kind of ['執務資料', 'ガイドライン']){
+      if (!(DB.fdma.documents || []).some(d => d.kind === kind)) continue;
+      const gid = 'fdmakind:' + kind;
+      html += '<button class="chip" data-law="' + esc(gid) + '" onclick="toggleLawFilter(\'' + esc(gid) + '\')">' + esc(kind) + '</button>';
     }
     if ((DB.fdma.notices || []).length){
       html += '<button class="chip" data-law="fdma:notice" onclick="toggleLawFilter(\'fdma:notice\')">通知</button>';
@@ -1863,6 +1947,167 @@ function renderFreshness(){
 }
 
 /* =====================================================================
+   ノウハウノート
+   市販の実務書で調べたことを自分の言葉で残す場所。端末内にのみ保存し、
+   検索と「指摘→根拠」の結果にも自分のノートが出るようにする。
+   ===================================================================== */
+const KNOWHOW_KEY = 'sst_knowhow';
+const KNOWHOW_TOPICS = ['防火管理', '消防用設備等', '避難・防火区画', '火気設備・危険物',
+                        '点検・届出', '執行手続き', '用途判定', 'その他'];
+
+function getKnowhow(){
+  try { return JSON.parse(localStorage.getItem(KNOWHOW_KEY) || '[]'); }
+  catch (e){ return []; }
+}
+function setKnowhow(list){
+  localStorage.setItem(KNOWHOW_KEY, JSON.stringify(list));
+  refreshKnowhowIndex();
+}
+
+/** ノウハウを検索索引に反映する（保存・削除のたびに入れ替える） */
+function refreshKnowhowIndex(){
+  for (let i = DB.articles.length - 1; i >= 0; i--){
+    if (DB.articles[i].isKnowhow) DB.articles.splice(i, 1);
+  }
+  for (const k of getKnowhow()){
+    DB.articles.push({
+      lawId: 'knowhow:' + k.id, groupId: 'knowhow', lawTitle: 'ノウハウ', short: 'ノート',
+      isKnowhow: true, kind: 'ノウハウ',
+      enforcement: '', fetched: k.updatedAt, sourceUrl: '',
+      title: k.title, caption: k.topic || '', crumbs: k.source ? ['出典メモ：' + k.source] : [],
+      url: '', paras: [{ num: '1', text: k.body }],
+      nTitle: normalize(k.title), nCaption: normalize(k.topic || ''), nCrumbs: '',
+      nBody: normalize(k.title + ' ' + k.body + ' ' + (k.tags || '')), num: null
+    });
+  }
+}
+
+function renderKnowhow(){
+  const box = document.getElementById('knowhow-list');
+  const q = normalize(document.getElementById('q-knowhow').value.trim());
+  let list = getKnowhow().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  if (q) list = list.filter(k => normalize(k.title + k.body + (k.tags || '') + (k.topic || '')).includes(q));
+
+  if (!list.length){
+    box.innerHTML = '<div class="empty">' + (q ? '見つかりませんでした。' :
+      'まだノートがありません。<br>「＋ 追加」から、調べて分かったことを残していけます。') + '</div>';
+    return;
+  }
+
+  box.innerHTML = list.map(k => {
+    const hits = detectSensitiveMemo([k.title, k.body, k.source].filter(Boolean).join('\n'));
+    return '<div class="memo' + (hits.length ? ' flagged' : '') + '">' +
+      '<div class="top"><div>' +
+        '<div class="name">' + esc(k.title) + '</div>' +
+        (k.topic ? '<div><span class="badge fdma">' + esc(k.topic) + '</span>' +
+          (k.tags ? '<span class="muted"> ' + esc(k.tags) + '</span>' : '') + '</div>' : '') +
+      '</div><div class="date">' + esc(fmtDate(k.updatedAt)) + '</div></div>' +
+      '<div class="txt">' + esc(k.body) + '</div>' +
+      (k.refs ? '<div class="refs">📘 ' + esc(k.refs) + '</div>' : '') +
+      (k.source ? '<div class="crumbs">出典メモ：' + esc(k.source) + '</div>' : '') +
+      (hits.length ? attnBlock(hits) : '') +
+      '<div class="acts no-print">' +
+        '<button class="btn sec sm" onclick="openKnowhowEditor(\'' + k.id + '\')">編集</button>' +
+        '<button class="btn sec sm" onclick="searchFromKnowhow(\'' + k.id + '\')">条文を調べる</button>' +
+        '<button class="btn sec sm" onclick="deleteKnowhow(\'' + k.id + '\')">削除</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function openKnowhowEditor(id){
+  const k = getKnowhow().find(x => x.id === id);
+  openModal(
+    '<button class="close" onclick="closeModal()">✕</button>' +
+    '<h3>' + (k ? 'ノートを編集' : 'ノートを追加') + '</h3>' +
+    '<label class="fld">見出し</label>' +
+    '<input type="text" id="kh-title" placeholder="例：みなし従属の判断で毎回迷う点" value="' + esc(k ? k.title : '') + '">' +
+    '<label class="fld">分野</label>' +
+    '<select id="kh-topic">' + KNOWHOW_TOPICS.map(t =>
+      '<option' + (k && k.topic === t ? ' selected' : '') + '>' + esc(t) + '</option>').join('') + '</select>' +
+    '<label class="fld">内容（自分の言葉で）</label>' +
+    '<textarea class="f" id="kh-body" style="min-height:150px" placeholder="調べて分かったこと、判断の順序、間違えやすい点など" oninput="checkKnowhowInput()">' + esc(k ? k.body : '') + '</textarea>' +
+    '<label class="fld">関係する条文（自由記述）</label>' +
+    '<input type="text" id="kh-refs" placeholder="例：令第1条の2第2項、立入検査M P.20" value="' + esc(k ? k.refs : '') + '">' +
+    '<label class="fld">出典メモ（何で調べたか）</label>' +
+    '<input type="text" id="kh-source" placeholder="例：建築消防advice 2026 / 執務資料 消防予第359号" value="' + esc(k ? k.source : '') + '" oninput="checkKnowhowInput()">' +
+    '<label class="fld">タグ</label>' +
+    '<input type="text" id="kh-tags" placeholder="例：用途判定 複合用途" value="' + esc(k ? k.tags : '') + '">' +
+    '<div id="kh-attn"></div>' +
+    '<div class="row" style="margin-top:14px">' +
+      '<button class="btn" onclick="saveKnowhow(' + (k ? "'" + k.id + "'" : 'null') + ')">保存</button>' +
+      '<button class="btn sec" onclick="closeModal()">やめる</button>' +
+    '</div>');
+  checkKnowhowInput();
+}
+
+function checkKnowhowInput(){
+  const box = document.getElementById('kh-attn');
+  if (!box) return;
+  const text = ['kh-title', 'kh-body', 'kh-source']
+    .map(id => (document.getElementById(id) || {}).value || '').join('\n');
+  const hits = detectSensitiveMemo(text);
+  box.innerHTML = hits.length ? attnBlock(hits) : '';
+}
+
+function saveKnowhow(id){
+  const title = document.getElementById('kh-title').value.trim();
+  const body = document.getElementById('kh-body').value.trim();
+  if (!title || !body){ alert('見出しと内容を入れてください。'); return; }
+
+  const list = getKnowhow();
+  const rec = {
+    id: id || ('k' + Date.now()),
+    title: title,
+    topic: document.getElementById('kh-topic').value,
+    body: body,
+    refs: document.getElementById('kh-refs').value.trim(),
+    source: document.getElementById('kh-source').value.trim(),
+    tags: document.getElementById('kh-tags').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+  const i = list.findIndex(x => x.id === rec.id);
+  if (i >= 0) list[i] = rec; else list.unshift(rec);
+
+  setKnowhow(list);
+  closeModal();
+  renderKnowhow();
+}
+
+function deleteKnowhow(id){
+  if (!confirm('このノートを削除します。よろしいですか？')) return;
+  setKnowhow(getKnowhow().filter(k => k.id !== id));
+  renderKnowhow();
+}
+
+function searchFromKnowhow(id){
+  const k = getKnowhow().find(x => x.id === id);
+  if (!k) return;
+  showModuleByName('jobun');
+  document.getElementById('q-jobun').value = k.refs || k.title;
+  runJobun();
+}
+
+/** 指摘に関係する自分のノートを拾う */
+function knowhowHitsFor(entry, raw){
+  const notes = DB.articles.filter(a => a.isKnowhow);
+  if (!notes.length) return [];
+  const terms = [...new Set(entry.keywords.concat(extractTerms(raw)).map(normalize))]
+    .filter(t => t.length >= 2);
+  if (!terms.length) return [];
+  const scored = [];
+  for (const a of notes){
+    let s = 0, matched = 0;
+    for (const t of terms){
+      if (a.nBody.includes(t)){ s += Math.min(t.length, 6); matched++; }
+      if (a.nCaption === normalize(entry.category)) s += 3;
+    }
+    if (matched) scored.push({ a, s });
+  }
+  scored.sort((x, y) => y.s - x.s);
+  return scored.slice(0, 2).map(x => x.a);
+}
+
+/* =====================================================================
    防火管理者の要否・甲種乙種の判定
    消防法第8条第1項／令第1条の2第3項／令第3条第1項に基づく。
    収容人員は規則第1条の3の算定方法を示したうえで利用者が入力する。
@@ -2110,18 +2355,33 @@ function renderFdmaStatus(){
   }
   const docs = DB.fdma.documents || [];
   const notices = DB.fdma.notices || [];
-  el.innerHTML = docs.map(d =>
+  const manuals = docs.filter(d => (d.kind || 'マニュアル') === 'マニュアル');
+  const byKind = k => docs.filter(d => d.kind === k);
+  const pagesOf = list => list.reduce((n, d) => n + d.page_count, 0);
+
+  let html = manuals.map(d =>
     '<div style="margin:7px 0;font-size:13px">' +
       '<span class="badge fdma">' + (d.title.includes('立入検査') ? '立入検査' : '違反処理') + '</span>' +
       esc(d.title) +
       '<div class="muted">' + esc(d.notice_no) + '（' + esc(d.date) + '改正）／全文 ' +
       d.page_count + 'ページを収録</div>' +
-    '</div>').join('') +
-    '<div style="margin:7px 0;font-size:13px">' +
+    '</div>').join('');
+
+  for (const kind of ['執務資料', 'ガイドライン']){
+    const list = byKind(kind);
+    if (!list.length) continue;
+    html += '<div style="margin:7px 0;font-size:13px">' +
+      '<span class="badge fdma">' + esc(kind) + '</span>' + esc(kind) + ' ' + list.length + '件' +
+      '<div class="muted">本文 ' + pagesOf(list) + 'ページを収録。最新は ' +
+      esc(list[0].notice_no || '') + '（' + esc(list[0].date) + '）</div></div>';
+  }
+
+  html += '<div style="margin:7px 0;font-size:13px">' +
       '<span class="badge fdma">通知</span>予防関係の通知・通達 ' + notices.length + '件' +
-      '<div class="muted">件名・番号・日付で検索できます（本文は未収録。リンクから原典PDFへ）</div>' +
+      '<div class="muted">件名・番号・日付で検索できます（本文未収録のものはリンクから原典PDFへ）</div>' +
     '</div>' +
     '<div class="muted" style="margin-top:6px">取得日：' + esc(fmtDate(DB.fdma.fetched_at)) + '</div>';
+  el.innerHTML = html;
 }
 
 function initUI(){
@@ -2137,6 +2397,8 @@ function initUI(){
     DB.yoto.items.map((y, i) =>
       '<option value="' + i + '">' + esc(y.label.slice(0, 46)) + (y.tokutei ? ' ★特定' : '') + '</option>').join('');
   runBoka();
+  refreshKnowhowIndex();
+  renderKnowhow();
   renderFlowChips();
   if (DB.enf && DB.enf.flows.length) showFlow(DB.enf.flows[0].id);
 
