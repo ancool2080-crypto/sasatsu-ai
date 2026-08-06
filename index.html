@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>査察AI｜防火対象物査察支援</title>
+<meta name="description" content="立入検査の指摘事項から根拠法令を引くための個人用ツール">
+<meta name="theme-color" content="#3D5740">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="査察AI">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;700&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#F7F3EC; --warm-white:#FDFAF5;
+  --sage:#5C7A5F; --sage-light:#8AAE8D; --sage-dark:#3D5740;
+  --terra:#C0714F; --terra-light:#DDA08A; --terra-pale:#F5E6DF;
+  --ochre:#C89A3E; --ochre-light:#EDD98A;
+  --bark:#6B4F3A; --bark-light:#A07A5F;
+  --ink:#2A2118; --ink-soft:#4A3F35;
+  --mist:#B8C4B0;
+  --shadow:rgba(42,33,24,0.12);
+  --radius-sm:8px; --radius-md:16px; --radius-lg:24px; --radius-xl:36px;
+  --font-serif:'Shippori Mincho',serif;
+  --font-sans:'Zen Kaku Gothic New',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--font-sans);background:var(--cream);color:var(--ink);
+  line-height:1.75;font-size:15px;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- 起動画面 ---------- */
+#app-loading{
+  position:fixed;inset:0;z-index:2000;background:var(--sage-dark);color:var(--warm-white);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;
+}
+#app-loading .mark{font-family:var(--font-serif);font-size:30px;letter-spacing:.14em}
+#app-loading .bar{width:min(280px,72vw);height:5px;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden}
+#app-loading .bar span{display:block;height:100%;width:0;background:var(--ochre-light);transition:width .3s ease}
+#app-loading .msg{font-size:13px;opacity:.85;min-height:1.6em}
+
+/* ---------- ヘッダー ---------- */
+.site-header{
+  background:var(--sage-dark);color:var(--warm-white);
+  padding-top:max(14px,calc(14px + env(safe-area-inset-top,0px)));
+  padding-bottom:12px;padding-left:16px;padding-right:16px;
+  position:sticky;top:0;z-index:60;box-shadow:0 2px 12px var(--shadow);
+}
+@media (display-mode:standalone){
+  .site-header{padding-top:max(20px,calc(env(safe-area-inset-top,0px) + 10px))}
+}
+.site-header h1{font-family:var(--font-serif);font-size:19px;font-weight:600;letter-spacing:.06em}
+.site-header .sub{font-size:11px;opacity:.78;margin-top:2px;letter-spacing:.03em}
+
+/* ---------- 検索窓（最上部固定） ---------- */
+.searchbar{
+  position:sticky;top:0;z-index:55;background:var(--cream);
+  padding:10px 12px 8px;border-bottom:1px solid rgba(107,79,58,.14);
+}
+.searchbar.stick-under{top:0}
+.search-input-wrap{position:relative;display:flex;align-items:center}
+.searchbar input[type=search],.searchbar textarea{
+  width:100%;font-family:var(--font-sans);font-size:16px;color:var(--ink);
+  background:var(--warm-white);border:1.5px solid var(--mist);border-radius:var(--radius-md);
+  padding:12px 44px 12px 14px;outline:none;resize:vertical;line-height:1.6;
+}
+.searchbar textarea{min-height:76px}
+.searchbar input[type=search]:focus,.searchbar textarea:focus{border-color:var(--sage)}
+.search-go{
+  position:absolute;right:6px;bottom:6px;border:none;cursor:pointer;
+  width:34px;height:34px;border-radius:50%;background:var(--sage);color:#fff;font-size:15px;
+}
+.search-hint{font-size:11px;color:var(--bark-light);margin-top:6px;line-height:1.6}
+
+/* ---------- ナビ ---------- */
+.nav-bar{
+  display:flex;background:var(--warm-white);border-bottom:1px solid rgba(107,79,58,.14);
+  position:sticky;top:0;z-index:58;
+}
+.nav-tab{
+  flex:1;text-align:center;padding:11px 4px 9px;font-size:12px;cursor:pointer;
+  border:none;background:none;color:var(--bark-light);font-family:var(--font-sans);
+  border-bottom:2.5px solid transparent;transition:.15s;
+}
+.nav-tab .ico{display:block;font-size:17px;margin-bottom:1px}
+.nav-tab.active{color:var(--sage-dark);border-bottom-color:var(--sage);font-weight:700}
+
+.main{max-width:760px;margin:0 auto;padding:14px 12px 40px}
+.module{display:none}
+.module.active{display:block}
+
+/* ---------- 共通パーツ ---------- */
+.card{
+  background:var(--warm-white);border-radius:var(--radius-md);
+  padding:14px 15px;margin-bottom:12px;box-shadow:0 1px 5px var(--shadow);
+}
+.card h3{font-family:var(--font-serif);font-size:15px;color:var(--sage-dark);margin-bottom:8px;font-weight:600}
+.muted{color:var(--bark-light);font-size:12px;line-height:1.7}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label.fld{display:block;font-size:12px;color:var(--bark);margin:10px 0 4px;font-weight:500}
+select,input[type=text],input[type=number],input[type=date],input[type=password],textarea.f{
+  width:100%;font-family:var(--font-sans);font-size:15px;color:var(--ink);
+  background:var(--warm-white);border:1.5px solid var(--mist);border-radius:var(--radius-sm);
+  padding:9px 10px;outline:none;
+}
+select:focus,input:focus,textarea.f:focus{border-color:var(--sage)}
+textarea.f{min-height:70px;line-height:1.7;resize:vertical}
+.btn{
+  font-family:var(--font-sans);font-size:14px;font-weight:500;cursor:pointer;
+  border:none;border-radius:var(--radius-xl);padding:10px 18px;background:var(--sage);color:#fff;
+}
+.btn.sec{background:var(--warm-white);color:var(--sage-dark);border:1.5px solid var(--sage-light)}
+.btn.warn{background:var(--terra)}
+.btn.sm{padding:6px 13px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{
+  font-size:12px;padding:5px 11px;border-radius:var(--radius-xl);cursor:pointer;
+  border:1.5px solid var(--mist);background:var(--warm-white);color:var(--bark);font-family:var(--font-sans);
+}
+.chip.on{background:var(--sage);border-color:var(--sage);color:#fff}
+
+.badge{
+  display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:var(--radius-xl);
+  background:var(--sage-light);color:#fff;margin-right:5px;vertical-align:middle;letter-spacing:.02em;
+}
+.badge.law{background:var(--sage-dark)}
+.badge.rule{background:var(--bark-light)}
+.badge.kenchiku{background:var(--ochre)}
+.badge.kiken{background:var(--terra)}
+.badge.tokutei{background:var(--terra);}
+.badge.ord{background:var(--bark)}
+
+/* ---------- 条文カード ---------- */
+.art{
+  background:var(--warm-white);border-left:3px solid var(--sage-light);
+  border-radius:var(--radius-sm);padding:12px 13px;margin-bottom:10px;box-shadow:0 1px 4px var(--shadow);
+}
+.art .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.art .title{font-family:var(--font-serif);font-size:14.5px;color:var(--sage-dark);font-weight:600;line-height:1.55}
+.art .caption{font-size:12.5px;color:var(--bark);margin-top:2px}
+.art .crumbs{font-size:10.5px;color:var(--bark-light);margin-top:4px}
+.art .point{font-size:11.5px;color:var(--terra);margin-top:5px}
+.art .body{
+  margin-top:9px;font-size:14px;line-height:1.95;color:var(--ink-soft);
+  border-top:1px dashed rgba(107,79,58,.2);padding-top:9px;display:none;white-space:pre-wrap;
+}
+.art .body.open{display:block}
+.art .body .para{margin-bottom:9px}
+.art .body .pn{color:var(--sage);font-weight:700;margin-right:5px}
+.art .body .item{margin-left:1em;font-size:13.5px}
+.art .body .sub{margin-left:2em;font-size:13px;color:var(--bark)}
+.art .foot{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap;
+}
+.art .foot a{
+  font-size:12px;color:var(--terra);text-decoration:none;border-bottom:1px solid var(--terra-light);
+}
+.art .fresh{font-size:10px;color:var(--bark-light)}
+.toggle-body{
+  background:none;border:none;color:var(--sage);font-size:12px;cursor:pointer;
+  font-family:var(--font-sans);padding:2px 0;
+}
+
+/* ---------- 指摘結果 ---------- */
+.finding{
+  background:var(--terra-pale);border-radius:var(--radius-md);padding:13px 14px;margin-bottom:14px;
+}
+.finding h4{font-family:var(--font-serif);font-size:14.5px;color:var(--bark);margin-bottom:3px;font-weight:600}
+.finding .meta{font-size:11px;color:var(--bark-light);margin-bottom:9px}
+.finding .note{
+  font-size:12px;color:var(--ink-soft);background:rgba(255,255,255,.6);
+  padding:8px 10px;border-radius:var(--radius-sm);margin-top:9px;line-height:1.75;
+}
+.conf{display:inline-block;font-size:10.5px;color:#fff;background:var(--sage);padding:2px 8px;border-radius:var(--radius-xl)}
+.conf.mid{background:var(--ochre)}
+.conf.low{background:var(--bark-light)}
+
+/* ---------- 注意書き ---------- */
+.disclaimer{
+  background:rgba(200,154,62,.13);border:1px solid rgba(200,154,62,.42);
+  border-radius:var(--radius-sm);padding:9px 11px;font-size:11.5px;color:var(--bark);
+  line-height:1.75;margin:10px 0;
+}
+.disclaimer strong{color:var(--terra)}
+
+/* ---------- メモ ---------- */
+.memo{background:var(--warm-white);border-radius:var(--radius-md);padding:12px 13px;margin-bottom:10px;box-shadow:0 1px 4px var(--shadow)}
+.memo .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.memo .name{font-family:var(--font-serif);font-size:14px;color:var(--sage-dark);font-weight:600}
+.memo .date{font-size:11px;color:var(--bark-light);white-space:nowrap}
+.memo .txt{font-size:13.5px;margin-top:6px;line-height:1.8;white-space:pre-wrap}
+.memo .refs{font-size:11.5px;color:var(--bark);margin-top:6px;line-height:1.8}
+.memo .acts{display:flex;gap:6px;margin-top:8px}
+.status{display:inline-block;font-size:10.5px;padding:2px 8px;border-radius:var(--radius-xl);color:#fff}
+.status.open{background:var(--terra)}
+.status.doing{background:var(--ochre)}
+.status.done{background:var(--sage)}
+
+.empty{text-align:center;color:var(--bark-light);font-size:13px;padding:26px 12px;line-height:1.9}
+
+/* ---------- AI解説 ---------- */
+.ai{
+  background:linear-gradient(180deg,rgba(138,174,141,.13),rgba(138,174,141,.05));
+  border:1px solid rgba(92,122,95,.3);border-radius:var(--radius-md);
+  padding:12px 13px;margin-top:10px;font-size:13.5px;line-height:1.95;white-space:pre-wrap;
+}
+.ai .lbl{font-size:10.5px;color:var(--sage-dark);font-weight:700;letter-spacing:.06em;margin-bottom:6px;display:block}
+
+/* ---------- モーダル ---------- */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(42,33,24,.5);z-index:900;
+  display:none;align-items:flex-end;justify-content:center;
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:var(--cream);width:100%;max-width:640px;max-height:88vh;overflow-y:auto;
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom,0px));
+}
+.modal h3{font-family:var(--font-serif);font-size:16px;color:var(--sage-dark);margin-bottom:4px}
+.modal .close{float:right;background:none;border:none;font-size:20px;color:var(--bark-light);cursor:pointer;line-height:1}
+
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));
+  background:var(--ink);color:var(--warm-white);font-size:13px;padding:10px 18px;border-radius:var(--radius-xl);
+  z-index:1200;opacity:0;pointer-events:none;transition:opacity .25s;max-width:88vw;text-align:center;
+}
+.toast.show{opacity:.95}
+
+@media (min-width:720px){
+  body{font-size:15.5px}
+  .main{padding:20px 16px 60px}
+  .site-header h1{font-size:22px}
+}
+
+/* ---------- 印刷（F4：参照メモ・簡易帳票） ---------- */
+@media print{
+  body{background:#fff;padding:0;font-size:11pt}
+  .site-header,.nav-bar,.searchbar,.modal-overlay,.toast,.no-print,.btn,.toggle-body{display:none !important}
+  .module{display:none !important}
+  .module.active{display:block !important}
+  .card,.art,.memo,.finding{box-shadow:none;border:1px solid #bbb;break-inside:avoid;background:#fff}
+  .art .body{display:block !important}
+  .art .foot a{color:#000;border:none}
+  .art .foot a::after{content:" (" attr(href) ")";font-size:8pt;color:#555;word-break:break-all}
+  .print-foot{display:block !important;margin-top:14px;font-size:9pt;color:#333;border-top:1px solid #999;padding-top:8px}
+}
+.print-foot{display:none}
+</style>
+</head>
+<body>
+
+<!-- ============ 起動画面 ============ -->
+<div id="app-loading">
+  <div class="mark">査察AI</div>
+  <div class="bar"><span id="load-bar"></span></div>
+  <div class="msg" id="load-msg">法令データを読み込んでいます…</div>
+</div>
+
+<!-- ============ アプリ本体 ============ -->
+<div id="app-main" style="display:none">
+
+  <header class="site-header">
+    <h1>査察AI</h1>
+    <div class="sub">防火対象物査察支援 ｜ 個人用の検索・学習ツール</div>
+  </header>
+
+  <nav class="nav-bar">
+    <button class="nav-tab active" data-mod="shiteki" onclick="showModule('shiteki')"><span class="ico">🔎</span>指摘→根拠</button>
+    <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><span class="ico">📖</span>条文検索</button>
+    <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><span class="ico">📝</span>査察メモ</button>
+    <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><span class="ico">⚙️</span>設定</button>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ F1 指摘事項→根拠法令 ============ -->
+    <section id="mod-shiteki" class="module active">
+      <div class="searchbar">
+        <div class="search-input-wrap">
+          <textarea id="q-shiteki" placeholder="指摘事項を入力（例：階段に段ボールが積まれ避難に支障がある）" enterkeyhint="search"></textarea>
+          <button class="search-go" onclick="runShiteki()" aria-label="検索">➜</button>
+        </div>
+        <div class="search-hint">自然文でOK。用途区分・延べ面積を入れると絞り込みの精度が上がります。</div>
+      </div>
+
+      <div class="card no-print">
+        <div class="row">
+          <button class="btn sec sm" onclick="toggleAttrs()" id="attr-toggle-btn">＋ 対象物の属性を入力</button>
+          <button class="btn sec sm" onclick="openChecklist()">☑ よくある指摘から選ぶ</button>
+        </div>
+        <div id="attrs" style="display:none">
+          <label class="fld" for="yoto">用途区分（令別表第一）</label>
+          <select id="yoto"><option value="">（指定しない）</option></select>
+          <div id="yoto-info" class="muted" style="margin-top:5px"></div>
+          <label class="fld" for="area">延べ面積（㎡）</label>
+          <input type="number" id="area" inputmode="numeric" placeholder="例：1200">
+          <label class="fld" for="ninin">収容人員（人）</label>
+          <input type="number" id="ninin" inputmode="numeric" placeholder="例：45">
+        </div>
+      </div>
+
+      <div id="shiteki-result"></div>
+    </section>
+
+    <!-- ============ F3 条文検索・学習 ============ -->
+    <section id="mod-jobun" class="module">
+      <div class="searchbar">
+        <div class="search-input-wrap">
+          <input type="search" id="q-jobun" placeholder="キーワード / 条番号（例：誘導灯、令26条、法17の3の3）" enterkeyhint="search">
+          <button class="search-go" onclick="runJobun()" aria-label="検索">➜</button>
+        </div>
+        <div class="chips" id="law-chips"></div>
+      </div>
+      <div id="jobun-result">
+        <div class="empty">調べたい語句か条番号を入力してください。<br>「令10条」「消防法第8条」のような指定もできます。</div>
+      </div>
+    </section>
+
+    <!-- ============ F2 査察メモ ============ -->
+    <section id="mod-memo" class="module">
+      <div class="searchbar">
+        <div class="search-input-wrap">
+          <input type="search" id="q-memo" placeholder="メモを検索（事業所・指摘内容・法令）" oninput="renderMemos()">
+        </div>
+      </div>
+      <div class="card no-print">
+        <div class="row">
+          <button class="btn sm" onclick="openMemoEditor()">＋ 新しいメモ</button>
+          <button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>
+          <button class="btn sec sm" onclick="exportMemos()">⬇ 書き出し</button>
+        </div>
+        <div class="muted" style="margin-top:8px">
+          事業所名・関係者名は仮名（A商店・甲ビル等）で記録することを勧めます。
+        </div>
+      </div>
+      <div id="memo-list"></div>
+      <div class="print-foot"></div>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section id="mod-settings" class="module">
+      <div class="card">
+        <h3>収録している法令データ</h3>
+        <div id="law-freshness"></div>
+        <div class="disclaimer">
+          表示している条文は取得時点のものです。<strong>法令改正への追随が遅れている可能性</strong>があるため、
+          最終確認は必ず e-Gov法令検索の原典で行ってください。データを更新するには
+          <code>scripts/fetch_laws.py</code> を再実行して再デプロイします。
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>火災予防条例</h3>
+        <div id="ord-status" class="muted"></div>
+        <div class="disclaimer">
+          市町村の火災予防条例は e-Gov法令検索に収録されていません。各自治体の例規集から取得したものを
+          <code>scripts/anonymize_ordinance.py</code> で<strong>自治体名をマスクした状態</strong>にしてから同梱します。
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>AI解説（Claude API・任意）</h3>
+        <div class="muted">
+          APIキーを登録すると、検索結果に平易な解説を付けられます。未登録でも検索・条文表示は
+          すべてオフラインで動作します。
+        </div>
+        <label class="fld" for="apikey">APIキー（sk-ant-… ／ この端末のブラウザにのみ保存）</label>
+        <input type="password" id="apikey" placeholder="sk-ant-...">
+        <div class="row" style="margin-top:10px">
+          <button class="btn sm" onclick="saveApiKey()">保存</button>
+          <button class="btn sec sm" onclick="clearApiKey()">削除</button>
+        </div>
+        <div id="api-status" class="muted" style="margin-top:8px"></div>
+        <div class="disclaimer">
+          APIキーはブラウザの localStorage に平文で保存され、ブラウザから直接 Anthropic に送信されます。
+          共用端末では使わないでください。
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>データの保存先</h3>
+        <div id="sync-status" class="muted"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn sec sm" onclick="openFirebaseSetup()">Firebase同期を設定</button>
+          <button class="btn sec sm" onclick="importMemos()">⬆ 読み込み</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>このツールについて</h3>
+        <div class="muted">
+          防火対象物査察支援AI v4.0（個人用版）<br>
+          出典：e-Gov法令検索（<a href="https://laws.e-gov.go.jp/" target="_blank" rel="noopener">https://laws.e-gov.go.jp/</a>）<br>
+          法令データは政府標準利用規約（第2.0版）／CC BY 4.0 互換のもとで利用しています。
+        </div>
+        <div class="disclaimer">
+          <strong>本ツールは法解釈の最終判断を行うものではありません。</strong>
+          提示される根拠法令は実務上の一般的な整理であり、個々の事案への当てはめと最終的な判断は
+          利用者本人が行ってください。
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ モーダル ============ -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal-body"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   査察AI v4.0 — 単一HTML型PWA
+   法令データは data/ 配下の静的JSON（ビルド時に e-Gov法令API から取得）
+   ===================================================================== */
+
+const PREFIX = 'sst_';
+const AI_MODEL = 'claude-opus-5';
+
+const DB = { index:null, laws:{}, articles:[], yoto:null, findings:null, ords:null };
+const state = { lawFilter:new Set(), lastResult:null };
+
+/* ---------------------------------------------------------------
+   起動
+   --------------------------------------------------------------- */
+function setProgress(pct, msg){
+  document.getElementById('load-bar').style.width = pct + '%';
+  if (msg) document.getElementById('load-msg').textContent = msg;
+}
+
+async function boot(){
+  try {
+    setProgress(6, '法令の一覧を読み込み中…');
+    DB.index = await getJSON('data/laws_index.json');
+
+    const total = DB.index.laws.length;
+    let done = 0;
+    for (const meta of DB.index.laws){
+      setProgress(10 + Math.round(70 * done / total), meta.law_title + ' を読み込み中…');
+      const law = await getJSON(meta.file);
+      DB.laws[law.law_id] = law;
+      done++;
+    }
+
+    setProgress(84, '用途区分と指摘辞書を読み込み中…');
+    DB.yoto = await getJSON('data/yoto.json');
+    DB.findings = await getJSON('data/findings_map.json');
+    DB.ords = await getJSON('data/ordinances.json').catch(() => null);
+
+    setProgress(92, '検索用の索引を作成中…');
+    buildIndex();
+
+    setProgress(100, '準備ができました');
+    initUI();
+    document.getElementById('app-loading').style.display = 'none';
+    document.getElementById('app-main').style.display = 'block';
+  } catch (err){
+    setProgress(100, '読み込みに失敗しました');
+    document.getElementById('load-msg').innerHTML =
+      '読み込みに失敗しました。<br>オンラインで一度開くとオフラインでも使えるようになります。<br><small>' +
+      String(err.message || err) + '</small>';
+  }
+}
+
+async function getJSON(path){
+  const res = await fetch(path, { cache:'no-cache' });
+  if (!res.ok) throw new Error(path + ' (' + res.status + ')');
+  return res.json();
+}
+
+/* ---------------------------------------------------------------
+   検索索引
+   --------------------------------------------------------------- */
+function normalize(s){
+  return (s || '').normalize('NFKC').toLowerCase()
+    .replace(/[\s　]+/g, '')
+    .replace(/[，、。．・「」（）()]/g, '');
+}
+
+function articleText(a){
+  let t = '';
+  for (const p of a.paras || []){
+    t += p.text || '';
+    for (const it of p.items || []){
+      t += (it.text || '');
+      for (const c of it.children || []){
+        t += (c.text || '');
+        for (const c2 of c.children || []) t += (c2.text || '');
+      }
+    }
+  }
+  return t;
+}
+
+function buildIndex(){
+  for (const meta of DB.index.laws){
+    const law = DB.laws[meta.law_id];
+    for (const a of law.articles){
+      if (a.deleted) continue;
+      const body = articleText(a);
+      DB.articles.push({
+        lawId: law.law_id, lawTitle: law.law_title, short: law.short,
+        enforcement: law.enforcement_date, fetched: law.fetched_at, sourceUrl: law.source_url,
+        title: a.title, caption: a.caption, crumbs: a.crumbs || [],
+        url: a.url, paras: a.paras || [],
+        nTitle: normalize(a.title), nCaption: normalize(a.caption),
+        nCrumbs: normalize((a.crumbs || []).join('')), nBody: normalize(body),
+        num: parseArticleNumber(a.title)
+      });
+    }
+  }
+
+  // 辞書：指摘辞書のキーワード＋用途名＋条見出しの語
+  const dict = new Set();
+  for (const e of DB.findings.entries){
+    for (const k of e.keywords) dict.add(normalize(k));
+  }
+  for (const y of DB.yoto.items){
+    const n = normalize(y.name);
+    if (n.length >= 2 && n.length <= 14) dict.add(n);
+  }
+  for (const a of DB.articles){
+    const cap = (a.caption || '').replace(/[（）]/g, '');
+    for (const part of cap.split(/[、・及びその他又は等に関する]+/)){
+      const n = normalize(part);
+      if (n.length >= 2 && n.length <= 12) dict.add(n);
+    }
+  }
+  DB.dict = [...dict].filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
+/* 「第三十三条の二」→ {n:33, br:[2]} */
+const KANJI = { '〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
+const KUNIT = { '十':10,'百':100,'千':1000 };
+function kanjiToInt(s){
+  if (!s) return null;
+  let total = 0, cur = 0, seen = false;
+  for (const ch of s){
+    if (ch in KANJI){ cur = KANJI[ch]; seen = true; }
+    else if (ch in KUNIT){ total += (cur || 1) * KUNIT[ch]; cur = 0; seen = true; }
+    else return null;
+  }
+  return seen ? total + cur : null;
+}
+function parseArticleNumber(title){
+  const m = /^第([〇一二三四五六七八九十百千]+)条((?:の[〇一二三四五六七八九十百千]+)*)$/.exec(title || '');
+  if (!m) return null;
+  const n = kanjiToInt(m[1]);
+  if (n === null) return null;
+  const br = [];
+  for (const bm of (m[2] || '').matchAll(/の([〇一二三四五六七八九十百千]+)/g)){
+    const v = kanjiToInt(bm[1]);
+    if (v === null) return null;
+    br.push(v);
+  }
+  return { n, br };
+}
+
+/* ---------------------------------------------------------------
+   クエリ解析
+   --------------------------------------------------------------- */
+/* 「建基令」が「令」に、「建築基準法」が「法」に食われないよう、
+   長く具体的な略称から順に判定する。 */
+const LAW_ALIAS = [
+  { re:/(建築基準法施行令|建基令)/,       id:'325CO0000000338' },
+  { re:/(建築基準法|建基法)/,            id:'325AC0000000201' },
+  { re:/(危険物の規制に関する政令|危政令)/, id:'334CO0000000306' },
+  { re:/(消防法施行規則|施行規則|規則)/, id:'336M50000008006' },
+  { re:/(消防法施行令|施行令|令)/,       id:'336CO0000000037' },
+  { re:/(消防法|法)/,                    id:'323AC1000000186' }
+];
+
+/** 「令10条」「消防法第17条の3の3」「規則23」等を拾う */
+function parseArticleQuery(raw){
+  const q = (raw || '').normalize('NFKC').replace(/[\s　]/g, '');
+  const m = /(第?)(\d+)条?((?:の\d+)*)/.exec(q);
+  if (!m) return null;
+  const head = q.slice(0, m.index);
+  let lawId = null;
+  for (const al of LAW_ALIAS){ if (al.re.test(head)){ lawId = al.id; break; } }
+  if (!lawId && !/条/.test(q)) return null;      // 法令名も「条」も無ければ番号指定とみなさない
+  const n = parseInt(m[2], 10);
+  const br = [...(m[3] || '').matchAll(/の(\d+)/g)].map(x => parseInt(x[1], 10));
+  return { lawId, n, br };
+}
+
+function matchArticleNumber(a, spec){
+  if (!a.num) return false;
+  if (spec.lawId && a.lawId !== spec.lawId) return false;
+  if (a.num.n !== spec.n) return false;
+  if (spec.br.length === 0) return true;
+  if (a.num.br.length < spec.br.length) return false;
+  return spec.br.every((v, i) => a.num.br[i] === v);
+}
+
+/** クエリから検索語を取り出す（辞書一致＋文字種ラン） */
+function extractTerms(raw){
+  const q = normalize(raw);
+  if (!q) return [];
+  const terms = new Set();
+  for (const d of DB.dict){ if (d.length >= 2 && q.includes(d)) terms.add(d); }
+  for (const run of raw.normalize('NFKC').match(/[一-龥]{2,}|[ァ-ヴー]{2,}|[a-zA-Z0-9]{2,}/g) || []){
+    const n = normalize(run);
+    if (!n) continue;
+    terms.add(n);
+    if (n.length > 4){
+      for (let len = 2; len <= 4; len++){
+        for (let i = 0; i + len <= n.length; i++) terms.add(n.slice(i, i + len));
+      }
+    }
+  }
+  // 上位語に埋もれた短い語は落とす
+  const list = [...terms].filter(t => t.length >= 2);
+  return list.filter(t => !list.some(o => o !== t && o.length > t.length && o.includes(t)) || t.length >= 3);
+}
+
+function countOccurrences(hay, needle, cap){
+  if (!hay || !needle) return 0;
+  let n = 0, i = 0;
+  while ((i = hay.indexOf(needle, i)) !== -1){ n++; i += needle.length; if (n >= cap) break; }
+  return n;
+}
+
+function searchArticles(raw, opts){
+  opts = opts || {};
+  const spec = parseArticleQuery(raw);
+  if (spec){
+    const hits = DB.articles.filter(a => matchArticleNumber(a, spec));
+    if (hits.length) return hits.map(a => ({ art:a, score:1000 }));
+  }
+
+  const terms = extractTerms(raw);
+  if (!terms.length) return [];
+
+  const out = [];
+  for (const a of DB.articles){
+    if (state.lawFilter.size && !state.lawFilter.has(a.lawId)) continue;
+    let score = 0, matched = 0;
+    for (const t of terms){
+      const w = Math.min(t.length, 6);
+      let s = 0;
+      if (a.nCaption.includes(t)) s += 7 * w;
+      if (a.nTitle.includes(t))   s += 3 * w;
+      if (a.nCrumbs.includes(t))  s += 2 * w;
+      const bodyHits = countOccurrences(a.nBody, t, 4);
+      if (bodyHits) s += w * (1 + Math.min(bodyHits, 3) * 0.5);
+      if (s > 0){ matched++; score += s; }
+    }
+    if (!matched) continue;
+    score *= (1 + (matched - 1) * 0.6);                 // 複数語一致を優遇
+    score /= 1 + Math.log10(1 + a.nBody.length / 400);  // 長文条文の水増しを抑える
+    out.push({ art:a, score });
+  }
+  out.sort((x, y) => y.score - x.score);
+  return out.slice(0, opts.limit || 25);
+}
+
+/* ---------------------------------------------------------------
+   描画ヘルパ
+   --------------------------------------------------------------- */
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function badgeClass(short){
+  if (short === '法') return 'law';
+  if (short === '令') return '';
+  if (short === '規則') return 'rule';
+  if (short === '危政令') return 'kiken';
+  return 'kenchiku';
+}
+function fmtDate(iso){ return (iso || '').slice(0, 10); }
+
+let artSeq = 0;
+function renderArticle(a, point){
+  const id = 'art' + (artSeq++);
+  let body = '';
+  for (const p of a.paras){
+    const pn = p.num && p.num !== '1' ? '<span class="pn">' + esc(p.num) + '</span>' : '';
+    body += '<div class="para">' + pn + esc(p.text);
+    for (const it of p.items || []){
+      body += '<div class="item">' + esc(it.title) + '　' + esc(it.text);
+      for (const c of it.children || []){
+        body += '<div class="sub">' + esc(c.title) + '　' + esc(c.text) + '</div>';
+      }
+      body += '</div>';
+    }
+    body += '</div>';
+  }
+  return '' +
+  '<div class="art">' +
+    '<div class="head"><div>' +
+      '<div class="title"><span class="badge ' + badgeClass(a.short) + '">' + esc(a.short) + '</span>' +
+        esc(a.lawTitle) + ' ' + esc(a.title) + '</div>' +
+      (a.caption ? '<div class="caption">' + esc(a.caption) + '</div>' : '') +
+      (a.crumbs.length ? '<div class="crumbs">' + esc(a.crumbs.join(' ＞ ')) + '</div>' : '') +
+      (point ? '<div class="point">▸ ' + esc(point) + '</div>' : '') +
+    '</div></div>' +
+    '<button class="toggle-body no-print" onclick="toggleBody(\'' + id + '\',this)">条文を表示 ▾</button>' +
+    '<div class="body" id="' + id + '">' + body + '</div>' +
+    '<div class="foot">' +
+      '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+      '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function toggleBody(id, btn){
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  btn.textContent = el.classList.contains('open') ? '条文を閉じる ▴' : '条文を表示 ▾';
+}
+
+function findArticle(lawId, title){
+  return DB.articles.find(a => a.lawId === lawId && a.title === title) || null;
+}
+
+/* ---------------------------------------------------------------
+   F1：指摘事項 → 根拠法令
+   --------------------------------------------------------------- */
+function scoreFinding(entry, raw){
+  const q = normalize(raw);
+  if (!q) return 0;
+  let score = 0, hits = 0;
+  for (const k of entry.keywords){
+    const n = normalize(k);
+    if (n && q.includes(n)){ score += n.length * 3; hits++; }
+  }
+  for (const part of entry.label.split(/[／・、（）]/)){
+    const n = normalize(part);
+    if (n.length >= 3 && q.includes(n)){ score += n.length * 2; hits++; }
+  }
+  if (!hits) return 0;
+  return score * (1 + (hits - 1) * 0.35);
+}
+
+function runShiteki(){
+  const raw = document.getElementById('q-shiteki').value.trim();
+  const box = document.getElementById('shiteki-result');
+  if (!raw){
+    box.innerHTML = '<div class="empty">指摘事項を入力してください。</div>';
+    return;
+  }
+
+  const scored = DB.findings.entries
+    .map(e => ({ e, s: scoreFinding(e, raw) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 4);
+
+  const yotoVal = document.getElementById('yoto').value;
+  const yoto = yotoVal ? DB.yoto.items[parseInt(yotoVal, 10)] : null;
+
+  let html = '';
+  html += '<div class="disclaimer no-print">' +
+    '<strong>これは判断の補助です。</strong>該当条項の確定と法解釈は、必ず e-Gov の条文本文を確認したうえで' +
+    'ご自身で判断してください。</div>';
+
+  if (yoto){
+    html += '<div class="card"><h3>対象物の前提</h3>' +
+      '<div>' + (yoto.tokutei ? '<span class="badge tokutei">特定防火対象物</span>' : '') +
+      esc(yoto.label) + '</div>';
+    const area = document.getElementById('area').value;
+    const nin  = document.getElementById('ninin').value;
+    if (area || nin){
+      html += '<div class="muted" style="margin-top:5px">' +
+        (area ? '延べ面積 ' + esc(area) + '㎡　' : '') + (nin ? '収容人員 ' + esc(nin) + '人' : '') + '</div>';
+    }
+    if (yoto.tokutei){
+      html += '<div class="muted" style="margin-top:6px">特定防火対象物のため、点検報告は1年に1回、' +
+        '既存対象物への遡及適用など取扱いが変わる規定があります。</div>';
+    }
+    html += '</div>';
+  }
+
+  if (!scored.length){
+    html += '<div class="card"><h3>該当する指摘パターンが見つかりませんでした</h3>' +
+      '<div class="muted">辞書に無い指摘のようです。下の条文検索結果を手がかりにしてください。' +
+      'よく使う指摘は data/findings_map.json に追記できます。</div></div>';
+  } else {
+    const top = scored[0].s;
+    scored.forEach((x, i) => {
+      const e = x.e;
+      const ratio = x.s / top;
+      const cls = i === 0 && ratio >= 0.999 ? '' : (ratio >= 0.6 ? 'mid' : 'low');
+      const lbl = cls === '' ? '第1候補' : (cls === 'mid' ? '候補' : '関連の可能性');
+      html += '<div class="finding">' +
+        '<h4>' + esc(e.label) + '</h4>' +
+        '<div class="meta"><span class="conf ' + cls + '">' + lbl + '</span> ' + esc(e.category) +
+        (e.ordinance ? ' <span class="badge ord">条例の確認要</span>' : '') + '</div>';
+      for (const ref of e.refs){
+        const a = findArticle(ref.law_id, ref.article);
+        html += a ? renderArticle(a, ref.point) :
+          '<div class="muted">（未収録：' + esc(ref.law_id) + ' ' + esc(ref.article) + '）</div>';
+      }
+      if (e.note) html += '<div class="note">💡 ' + esc(e.note) + '</div>';
+      if (e.ordinance){
+        html += '<div class="note">📕 この指摘は火災予防条例に基準が委任されている部分があります。' +
+          '所属の条例本文を必ず併せて確認してください。' + ordHint() + '</div>';
+      }
+      html += '</div>';
+    });
+  }
+
+  const extra = searchArticles(raw, { limit:8 });
+  const shown = new Set();
+  for (const x of scored) for (const r of x.e.refs) shown.add(r.law_id + ':' + r.article);
+  const rest = extra.filter(r => !shown.has(r.art.lawId + ':' + r.art.title)).slice(0, 5);
+  if (rest.length){
+    html += '<div class="card"><h3>語句が一致したその他の条文</h3>' +
+      rest.map(r => renderArticle(r.art)).join('') + '</div>';
+  }
+
+  html += '<div class="card no-print"><div class="row">' +
+    '<button class="btn sm" onclick="explainShiteki()">🤖 AIで解説を補足</button>' +
+    '<button class="btn sec sm" onclick="memoFromResult()">📝 メモに残す</button>' +
+    '<button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>' +
+    '</div><div id="ai-shiteki"></div></div>';
+
+  html += '<div class="print-foot">査察AI v4.0／出典：e-Gov法令検索。本資料は判断の補助であり、' +
+    '最終的な法令適用の判断は作成者本人が行うものです。</div>';
+
+  box.innerHTML = html;
+  state.lastResult = { raw, entries: scored.map(x => x.e), yoto, extra: rest.map(r => r.art) };
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function ordHint(){
+  const n = DB.ords && DB.ords.ordinances ? DB.ords.ordinances.length : 0;
+  return n ? '（このツールには匿名化済みの条例が' + n + '件入っています）'
+           : '（このツールにはまだ条例データが入っていません）';
+}
+
+function toggleAttrs(){
+  const el = document.getElementById('attrs');
+  const on = el.style.display === 'none';
+  el.style.display = on ? 'block' : 'none';
+  document.getElementById('attr-toggle-btn').textContent = on ? '－ 属性を閉じる' : '＋ 対象物の属性を入力';
+}
+
+function openChecklist(){
+  const byCat = {};
+  for (const e of DB.findings.entries){ (byCat[e.category] = byCat[e.category] || []).push(e); }
+  let html = '<button class="close" onclick="closeModal()">✕</button><h3>よくある指摘</h3>' +
+    '<div class="muted">選ぶと入力欄に入ります。</div>';
+  for (const cat of Object.keys(byCat)){
+    html += '<div style="margin-top:12px"><div class="badge">' + esc(cat) + '</div>';
+    for (const e of byCat[cat]){
+      html += '<div style="margin:7px 0"><button class="chip" style="text-align:left;white-space:normal" ' +
+        'onclick="pickFinding(\'' + e.id + '\')">' + esc(e.label) + '</button></div>';
+    }
+    html += '</div>';
+  }
+  openModal(html);
+}
+
+function pickFinding(id){
+  const e = DB.findings.entries.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('q-shiteki').value = e.label;
+  closeModal();
+  runShiteki();
+}
+
+/* ---------------------------------------------------------------
+   F3：条文検索
+   --------------------------------------------------------------- */
+function runJobun(){
+  const raw = document.getElementById('q-jobun').value.trim();
+  const box = document.getElementById('jobun-result');
+  if (!raw){
+    box.innerHTML = '<div class="empty">調べたい語句か条番号を入力してください。</div>';
+    return;
+  }
+  const hits = searchArticles(raw, { limit:25 });
+  if (!hits.length){
+    box.innerHTML = '<div class="empty">見つかりませんでした。<br>語句を短くするか、別の言い方を試してください。</div>';
+    return;
+  }
+  let html = '<div class="muted" style="margin:4px 0 10px">' + hits.length + '件（上位から表示）</div>';
+  html += hits.map(h => renderArticle(h.art)).join('');
+  html += '<div class="card no-print"><div class="row">' +
+    '<button class="btn sm" onclick="explainJobun()">🤖 この語句をやさしく解説</button>' +
+    '<button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>' +
+    '</div><div id="ai-jobun"></div></div>';
+  html += '<div class="print-foot">査察AI v4.0／出典：e-Gov法令検索。最終確認は原典で行ってください。</div>';
+  box.innerHTML = html;
+  state.lastJobun = { raw, arts: hits.slice(0, 6).map(h => h.art) };
+}
+
+function renderLawChips(){
+  const wrap = document.getElementById('law-chips');
+  wrap.innerHTML = DB.index.laws.map(l =>
+    '<button class="chip" data-law="' + l.law_id + '" onclick="toggleLawFilter(\'' + l.law_id + '\')">' +
+    esc(l.short) + '</button>').join('');
+}
+function toggleLawFilter(id){
+  if (state.lawFilter.has(id)) state.lawFilter.delete(id); else state.lawFilter.add(id);
+  document.querySelectorAll('#law-chips .chip').forEach(c => {
+    c.classList.toggle('on', state.lawFilter.has(c.dataset.law));
+  });
+  if (document.getElementById('q-jobun').value.trim()) runJobun();
+}
+
+/* ---------------------------------------------------------------
+   F2：査察メモ（localStorage / Firebase同期に拡張可能な構造）
+   --------------------------------------------------------------- */
+function getMemos(){
+  try { return JSON.parse(localStorage.getItem(PREFIX + 'memos') || '[]'); }
+  catch(e){ return []; }
+}
+function setMemos(list){
+  localStorage.setItem(PREFIX + 'memos', JSON.stringify(list));
+  if (window.Sync && Sync.enabled) Sync.pushAll(list);
+}
+
+function openMemoEditor(id){
+  const m = id ? getMemos().find(x => x.id === id) : null;
+  const yotoOpts = ['<option value="">（指定しない）</option>'].concat(
+    DB.yoto.items.map((y, i) =>
+      '<option value="' + i + '"' + (m && m.yotoIdx === i ? ' selected' : '') + '>' + esc(y.label) + '</option>')
+  ).join('');
+  const html =
+   '<button class="close" onclick="closeModal()">✕</button>' +
+   '<h3>' + (m ? 'メモを編集' : '新しいメモ') + '</h3>' +
+   '<label class="fld">対象物（仮名で記録することを勧めます）</label>' +
+   '<input type="text" id="m-name" placeholder="例：A商店ビル" value="' + esc(m ? m.name : '') + '">' +
+   '<label class="fld">用途区分</label><select id="m-yoto">' + yotoOpts + '</select>' +
+   '<label class="fld">検査日</label>' +
+   '<input type="date" id="m-date" value="' + esc(m ? m.date : new Date().toISOString().slice(0,10)) + '">' +
+   '<label class="fld">指摘事項</label>' +
+   '<textarea class="f" id="m-text" placeholder="発見した事項">' + esc(m ? m.text : '') + '</textarea>' +
+   '<label class="fld">根拠法令（自由記述）</label>' +
+   '<textarea class="f" id="m-refs" placeholder="例：法第8条第1項、令第1条の2">' + esc(m ? m.refs : '') + '</textarea>' +
+   '<label class="fld">是正状況</label>' +
+   '<select id="m-status">' +
+     ['open:未是正','doing:是正中','done:是正済'].map(s => {
+       const [v, t] = s.split(':');
+       return '<option value="' + v + '"' + (m && m.status === v ? ' selected' : '') + '>' + t + '</option>';
+     }).join('') +
+   '</select>' +
+   '<div class="row" style="margin-top:16px">' +
+     '<button class="btn" onclick="saveMemo(' + (m ? "'" + m.id + "'" : 'null') + ')">保存</button>' +
+     '<button class="btn sec" onclick="closeModal()">キャンセル</button>' +
+     (m ? '<button class="btn warn sm" onclick="deleteMemo(\'' + m.id + '\')">削除</button>' : '') +
+   '</div>';
+  openModal(html);
+}
+
+function saveMemo(id){
+  const yi = document.getElementById('m-yoto').value;
+  const rec = {
+    id: id || ('m' + Date.now()),
+    name: document.getElementById('m-name').value.trim(),
+    yotoIdx: yi === '' ? null : parseInt(yi, 10),
+    yotoLabel: yi === '' ? '' : DB.yoto.items[parseInt(yi, 10)].label,
+    date: document.getElementById('m-date').value,
+    text: document.getElementById('m-text').value.trim(),
+    refs: document.getElementById('m-refs').value.trim(),
+    status: document.getElementById('m-status').value,
+    updatedAt: new Date().toISOString()
+  };
+  if (!rec.text){ toast('指摘事項を入力してください'); return; }
+  const list = getMemos();
+  const i = list.findIndex(x => x.id === rec.id);
+  if (i >= 0) list[i] = rec; else list.unshift(rec);
+  setMemos(list);
+  closeModal(); renderMemos(); toast('保存しました');
+}
+
+function deleteMemo(id){
+  if (!confirm('このメモを削除します。よろしいですか？')) return;
+  setMemos(getMemos().filter(x => x.id !== id));
+  closeModal(); renderMemos(); toast('削除しました');
+}
+
+function renderMemos(){
+  const q = normalize(document.getElementById('q-memo').value || '');
+  const list = getMemos().filter(m =>
+    !q || normalize(m.name + m.text + m.refs + (m.yotoLabel || '')).includes(q));
+  const box = document.getElementById('memo-list');
+  if (!list.length){
+    box.innerHTML = '<div class="empty">' +
+      (q ? '一致するメモがありません。' : 'まだメモがありません。<br>「＋ 新しいメモ」から追加できます。') +
+      '</div>';
+    return;
+  }
+  const label = { open:'未是正', doing:'是正中', done:'是正済' };
+  box.innerHTML = list.map(m =>
+    '<div class="memo">' +
+      '<div class="top"><div>' +
+        '<div class="name">' + esc(m.name || '（対象物名なし）') + '</div>' +
+        '<div><span class="status ' + esc(m.status) + '">' + esc(label[m.status] || '') + '</span>' +
+        (m.yotoLabel ? ' <span class="muted">' + esc(m.yotoLabel.slice(0, 24)) + '</span>' : '') + '</div>' +
+      '</div><div class="date">' + esc(m.date) + '</div></div>' +
+      '<div class="txt">' + esc(m.text) + '</div>' +
+      (m.refs ? '<div class="refs">📘 ' + esc(m.refs) + '</div>' : '') +
+      '<div class="acts no-print">' +
+        '<button class="btn sec sm" onclick="openMemoEditor(\'' + m.id + '\')">編集</button>' +
+        '<button class="btn sec sm" onclick="searchFromMemo(\'' + m.id + '\')">根拠を調べる</button>' +
+      '</div>' +
+    '</div>').join('');
+}
+
+function searchFromMemo(id){
+  const m = getMemos().find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('q-shiteki').value = m.text;
+  if (m.yotoIdx !== null && m.yotoIdx !== undefined){
+    document.getElementById('yoto').value = String(m.yotoIdx);
+    onYotoChange();
+  }
+  showModuleByName('shiteki');
+  runShiteki();
+}
+
+function memoFromResult(){
+  const r = state.lastResult;
+  if (!r) return;
+  openMemoEditor();
+  setTimeout(() => {
+    document.getElementById('m-text').value = r.raw;
+    const refs = [];
+    for (const e of r.entries){
+      for (const ref of e.refs){
+        const law = DB.laws[ref.law_id];
+        refs.push((law ? law.short : '') + ref.article + (ref.point ? '（' + ref.point + '）' : ''));
+      }
+    }
+    document.getElementById('m-refs').value = [...new Set(refs)].join('、');
+    if (r.yoto){
+      const idx = DB.yoto.items.indexOf(r.yoto);
+      if (idx >= 0) document.getElementById('m-yoto').value = String(idx);
+    }
+  }, 30);
+}
+
+function exportMemos(){
+  const blob = new Blob([JSON.stringify({ app:'sasatsu-ai', version:4, memos:getMemos() }, null, 1)],
+    { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sasatsu-memos-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importMemos(){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json';
+  inp.onchange = () => {
+    const f = inp.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const data = JSON.parse(rd.result);
+        const incoming = data.memos || [];
+        const cur = getMemos();
+        const byId = new Map(cur.map(m => [m.id, m]));
+        for (const m of incoming) byId.set(m.id, m);
+        setMemos([...byId.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+        renderMemos();
+        toast(incoming.length + '件を読み込みました');
+      } catch(e){ toast('読み込めませんでした'); }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+
+/* ---------------------------------------------------------------
+   Claude API（任意・未設定でもアプリは動作する）
+   --------------------------------------------------------------- */
+function getApiKey(){ return localStorage.getItem(PREFIX + 'apikey') || ''; }
+function saveApiKey(){
+  const k = document.getElementById('apikey').value.trim();
+  if (!k.startsWith('sk-ant-')){ toast('APIキーは sk-ant- で始まります'); return; }
+  localStorage.setItem(PREFIX + 'apikey', k);
+  document.getElementById('apikey').value = '';
+  updateApiStatus(); toast('保存しました');
+}
+function clearApiKey(){
+  localStorage.removeItem(PREFIX + 'apikey');
+  updateApiStatus(); toast('削除しました');
+}
+function updateApiStatus(){
+  document.getElementById('api-status').textContent =
+    getApiKey() ? '✅ 登録済み（AI解説が使えます）' : '未登録（ローカル検索のみで動作します）';
+}
+
+async function askClaude(prompt){
+  const key = getApiKey();
+  if (!key) throw new Error('nokey');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key':key,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true'
+    },
+    body: JSON.stringify({
+      model: AI_MODEL,
+      max_tokens: 1600,
+      output_config: { effort: 'low' },
+      system:
+        'あなたは日本の消防本部予防課の職員が使う、立入検査の実務支援ツールの解説担当です。' +
+        '与えられた条文だけを根拠に、消防職員向けに簡潔な日本語で説明してください。' +
+        '守ること：(1)条文に書かれていないことは推測で断定しない。(2)述べる内容は「実務上の一般的な解釈」であると明記する。' +
+        '(3)条・項・号を示すときは与えられた条文の表記をそのまま使う。(4)条文の逐語引用は避け、自分の言葉で要約する。' +
+        '(5)最終的な判断は利用者本人が原典で確認すべきことを最後に一文添える。(6)全体で400字程度に収める。',
+      messages: [{ role:'user', content: prompt }]
+    })
+  });
+  if (!res.ok){
+    const t = await res.text().catch(() => '');
+    throw new Error('API ' + res.status + ' ' + t.slice(0, 200));
+  }
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') throw new Error('refusal');
+  const block = (data.content || []).find(b => b.type === 'text');
+  return block ? block.text : '（応答が空でした）';
+}
+
+function articleDigest(a, limit){
+  let t = a.lawTitle + ' ' + a.title + (a.caption ? ' ' + a.caption : '') + '：' + articleText(a);
+  return t.slice(0, limit || 700);
+}
+
+async function explainShiteki(){
+  const r = state.lastResult;
+  const box = document.getElementById('ai-shiteki');
+  if (!r) return;
+  if (!getApiKey()){
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>' +
+      '設定タブでAPIキーを登録すると、この結果に平易な解説を付けられます。' +
+      'キーが無くても検索と条文表示はそのまま使えます。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
+  const arts = [];
+  for (const e of r.entries) for (const ref of e.refs){
+    const a = findArticle(ref.law_id, ref.article);
+    if (a) arts.push(articleDigest(a, 600));
+  }
+  const prompt =
+    '【指摘事項】' + r.raw + '\n' +
+    (r.yoto ? '【用途区分】' + r.yoto.label + (r.yoto.tokutei ? '（特定防火対象物）' : '') + '\n' : '') +
+    '【候補として抽出された条文】\n' + arts.slice(0, 6).join('\n---\n') + '\n\n' +
+    'この指摘がどの条文のどの部分に当たるのか、確認すべき順序が分かるように説明してください。' +
+    '判断が分かれうる点があれば、その分かれ目も示してください。';
+  try {
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説（実務上の一般的な解釈）</span>' +
+      esc(await askClaude(prompt)) + '</div>';
+  } catch(e){
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>取得できませんでした：' +
+      esc(e.message) + '</div>';
+  }
+}
+
+async function explainJobun(){
+  const r = state.lastJobun;
+  const box = document.getElementById('ai-jobun');
+  if (!r) return;
+  if (!getApiKey()){
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>' +
+      '設定タブでAPIキーを登録すると解説を表示できます。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
+  const prompt = '【調べている語句】' + r.raw + '\n【関連する条文】\n' +
+    r.arts.map(a => articleDigest(a, 600)).join('\n---\n') +
+    '\n\nこの語句が法令上どう位置づけられているのかを、査察実務でどこを見ればよいかが分かるように説明してください。';
+  try {
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説（実務上の一般的な解釈）</span>' +
+      esc(await askClaude(prompt)) + '</div>';
+  } catch(e){
+    box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>取得できませんでした：' +
+      esc(e.message) + '</div>';
+  }
+}
+
+/* ---------------------------------------------------------------
+   Firebase同期（設定が入っていれば有効化する）
+   --------------------------------------------------------------- */
+const Sync = {
+  enabled:false, cfg:null, app:null, auth:null, db:null, uid:null,
+  getConfig(){
+    try { return JSON.parse(localStorage.getItem(PREFIX + 'fbcfg') || 'null'); }
+    catch(e){ return null; }
+  },
+  async init(){
+    const cfg = this.getConfig();
+    if (!cfg) { updateSyncStatus(); return; }
+    try {
+      const [{ initializeApp }, authMod, fsMod] = await Promise.all([
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'),
+        import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+      ]);
+      this.app = initializeApp(cfg);
+      this.auth = authMod.getAuth(this.app);
+      this.db = fsMod.getFirestore(this.app);
+      this.authMod = authMod; this.fsMod = fsMod;
+      authMod.onAuthStateChanged(this.auth, async (user) => {
+        this.uid = user ? user.uid : null;
+        this.enabled = !!user;
+        updateSyncStatus();
+        if (user) await this.pullAll();
+      });
+    } catch(e){
+      console.warn('Firebase初期化に失敗', e);
+      updateSyncStatus('初期化に失敗しました：' + e.message);
+    }
+  },
+  async signIn(email, pass, isNew){
+    const m = this.authMod;
+    if (isNew) await m.createUserWithEmailAndPassword(this.auth, email, pass);
+    else await m.signInWithEmailAndPassword(this.auth, email, pass);
+  },
+  async signOut(){ await this.authMod.signOut(this.auth); },
+  async pushAll(list){
+    if (!this.enabled) return;
+    const { doc, setDoc } = this.fsMod;
+    try {
+      await setDoc(doc(this.db, 'users', this.uid, 'data', 'memos'),
+        { memos:list, updatedAt:new Date().toISOString() });
+    } catch(e){ console.warn('同期に失敗', e); }
+  },
+  async pullAll(){
+    const { doc, getDoc } = this.fsMod;
+    try {
+      const snap = await getDoc(doc(this.db, 'users', this.uid, 'data', 'memos'));
+      if (!snap.exists()) { await this.pushAll(getMemos()); return; }
+      const remote = snap.data().memos || [];
+      const byId = new Map(getMemos().map(m => [m.id, m]));
+      for (const m of remote){
+        const cur = byId.get(m.id);
+        if (!cur || (m.updatedAt || '') > (cur.updatedAt || '')) byId.set(m.id, m);
+      }
+      const merged = [...byId.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      localStorage.setItem(PREFIX + 'memos', JSON.stringify(merged));
+      renderMemos();
+      await this.pushAll(merged);
+    } catch(e){ console.warn('取得に失敗', e); }
+  }
+};
+
+function updateSyncStatus(extra){
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  if (Sync.enabled) el.textContent = '✅ Firebaseと同期中（PC・スマホで同じ内容になります）';
+  else if (Sync.getConfig()) el.textContent = 'Firebase設定済み・未ログインです。' + (extra || '');
+  else el.textContent = 'この端末のブラウザにのみ保存しています（同期なし）。' + (extra || '');
+}
+
+function openFirebaseSetup(){
+  const cfg = Sync.getConfig();
+  const html =
+   '<button class="close" onclick="closeModal()">✕</button>' +
+   '<h3>Firebase同期の設定</h3>' +
+   '<div class="muted">PCとスマホで査察メモを同期したい場合に設定します。設定しなくてもツールは動きます。</div>' +
+   '<div class="disclaimer" style="margin-top:10px">' +
+     '<strong>先にFirebase側の準備が必要です。</strong><br>' +
+     '① console.firebase.google.com でプロジェクトを作成<br>' +
+     '② Authentication →「メール/パスワード」を有効にする<br>' +
+     '③ Firestore Database を作成（ロケーション asia-northeast1、本番環境モード）<br>' +
+     '④「ルール」タブに下のセキュリティルールを貼って公開<br>' +
+     '⑤ プロジェクト設定 → ウェブアプリを追加して firebaseConfig をコピー' +
+   '</div>' +
+   '<label class="fld">firebaseConfig（{ ... } の中身をそのまま貼り付け）</label>' +
+   '<textarea class="f" id="fb-cfg" style="min-height:120px" placeholder=\'{"apiKey":"...","authDomain":"...","projectId":"...","appId":"..."}\'>' +
+     esc(cfg ? JSON.stringify(cfg, null, 1) : '') + '</textarea>' +
+   '<div class="row" style="margin-top:10px">' +
+     '<button class="btn sm" onclick="saveFirebaseCfg()">保存して有効化</button>' +
+     (cfg ? '<button class="btn sec sm" onclick="openFirebaseLogin()">ログイン</button>' : '') +
+     (Sync.enabled ? '<button class="btn warn sm" onclick="Sync.signOut().then(()=>{closeModal();toast(\'ログアウトしました\')})">ログアウト</button>' : '') +
+   '</div>' +
+   '<label class="fld">Firestore セキュリティルール（コピーして貼り付け）</label>' +
+   '<textarea class="f" style="min-height:150px;font-size:12px" readonly>' + esc(
+     "rules_version = '2';\n" +
+     "service cloud.firestore {\n" +
+     "  match /databases/{database}/documents {\n" +
+     "    match /users/{userId}/{document=**} {\n" +
+     "      allow read, write: if request.auth != null && request.auth.uid == userId;\n" +
+     "    }\n" +
+     "  }\n" +
+     "}") + '</textarea>';
+  openModal(html);
+}
+
+function saveFirebaseCfg(){
+  const raw = document.getElementById('fb-cfg').value.trim();
+  try {
+    const cfg = JSON.parse(raw);
+    if (!cfg.apiKey || !cfg.projectId) throw new Error('apiKey と projectId が必要です');
+    localStorage.setItem(PREFIX + 'fbcfg', JSON.stringify(cfg));
+    toast('保存しました。ログインしてください');
+    closeModal();
+    Sync.init().then(() => openFirebaseLogin());
+  } catch(e){ toast('設定を読み取れません：' + e.message); }
+}
+
+function openFirebaseLogin(){
+  openModal(
+    '<button class="close" onclick="closeModal()">✕</button>' +
+    '<h3>ログイン</h3>' +
+    '<div class="muted">初回は「新規登録」でアカウントを作ります（自分ひとり用）。</div>' +
+    '<label class="fld">メールアドレス</label><input type="text" id="fb-mail" inputmode="email">' +
+    '<label class="fld">パスワード</label><input type="password" id="fb-pass">' +
+    '<div class="row" style="margin-top:14px">' +
+      '<button class="btn sm" onclick="doFirebaseAuth(false)">ログイン</button>' +
+      '<button class="btn sec sm" onclick="doFirebaseAuth(true)">新規登録</button>' +
+    '</div><div id="fb-msg" class="muted" style="margin-top:8px"></div>');
+}
+
+async function doFirebaseAuth(isNew){
+  const mail = document.getElementById('fb-mail').value.trim();
+  const pass = document.getElementById('fb-pass').value;
+  const msg = document.getElementById('fb-msg');
+  msg.textContent = '処理中…';
+  try {
+    await Sync.signIn(mail, pass, isNew);
+    closeModal(); toast('ログインしました');
+  } catch(e){ msg.textContent = 'できませんでした：' + e.message; }
+}
+
+/* ---------------------------------------------------------------
+   UI 基本
+   --------------------------------------------------------------- */
+function showModule(name){
+  showModuleByName(name);
+}
+function showModuleByName(name){
+  document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  const mod = document.getElementById('mod-' + name);
+  if (mod) mod.classList.add('active');
+  const tab = document.querySelector('.nav-tab[data-mod="' + name + '"]');
+  if (tab) tab.classList.add('active');
+  window.scrollTo({ top:0 });
+}
+
+function openModal(html){
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function onYotoChange(){
+  const v = document.getElementById('yoto').value;
+  const info = document.getElementById('yoto-info');
+  if (v === ''){ info.textContent = ''; return; }
+  const y = DB.yoto.items[parseInt(v, 10)];
+  const detail = (y.detail && y.detail.length) ? y.detail.slice(0, 2).join(' / ') : y.name;
+  info.innerHTML = (y.tokutei ? '<span class="badge tokutei">特定防火対象物</span>' : '') +
+    esc(detail.slice(0, 150));
+}
+
+function renderFreshness(){
+  const box = document.getElementById('law-freshness');
+  box.innerHTML = DB.index.laws.map(l =>
+    '<div style="margin:7px 0;font-size:13px">' +
+      '<span class="badge ' + badgeClass(l.short) + '">' + esc(l.short) + '</span>' + esc(l.law_title) +
+      '<div class="muted">施行日 ' + esc(l.enforcement_date) + '／最終改正 ' + esc(l.last_amendment_date) +
+      '／条文 ' + l.article_count + '件</div>' +
+    '</div>').join('') +
+    '<div class="muted" style="margin-top:8px">最終取得日：' + esc(fmtDate(DB.index.fetched_at)) + '</div>';
+
+  const os = document.getElementById('ord-status');
+  const n = DB.ords && DB.ords.ordinances ? DB.ords.ordinances.length : 0;
+  os.textContent = n ? ('匿名化済みの条例を ' + n + '件収録しています。')
+                     : '条例データはまだ入っていません。';
+}
+
+function initUI(){
+  const sel = document.getElementById('yoto');
+  sel.innerHTML = '<option value="">（指定しない）</option>' +
+    DB.yoto.items.map((y, i) =>
+      '<option value="' + i + '">' + esc(y.label.slice(0, 46)) + (y.tokutei ? ' ★特定' : '') + '</option>').join('');
+  sel.addEventListener('change', onYotoChange);
+
+  renderLawChips();
+  renderFreshness();
+  renderMemos();
+  updateApiStatus();
+  updateSyncStatus();
+
+  document.getElementById('q-jobun').addEventListener('keydown', e => {
+    if (e.key === 'Enter'){ e.preventDefault(); runJobun(); }
+  });
+  document.getElementById('q-shiteki').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); runShiteki(); }
+  });
+
+  Sync.init();
+}
+
+/* Service Worker */
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW登録失敗', e));
+  });
+}
+
+boot();
+</script>
+</body>
+</html>

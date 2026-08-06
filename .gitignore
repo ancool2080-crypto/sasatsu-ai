@@ -1,0 +1,7 @@
+# 条例の原文は自治体が特定できるためコミットしない
+data/ordinances_src/
+
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

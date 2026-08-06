@@ -1,0 +1,8 @@
+{
+ "generated_at": "",
+ "source": "利用者が各自治体の例規集等から取得した火災予防条例（原文は非同梱）",
+ "anonymized": true,
+ "note": "data/ordinances_src/ に条例本文のテキストを置き、scripts/anonymize_ordinance.py を実行すると、自治体名をマスクした状態でこのファイルが生成されます。",
+ "ordinances": [],
+ "review_candidates": []
+}

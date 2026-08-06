@@ -1,0 +1,74 @@
+{
+ "fetched_at": "2026-08-06T11:54:15+09:00",
+ "source": "e-Gov法令検索 法令API Version 2",
+ "source_url": "https://laws.e-gov.go.jp/",
+ "license": "政府標準利用規約(第2.0版) / CC BY 4.0 互換",
+ "laws": [
+  {
+   "law_id": "323AC1000000186",
+   "law_title": "消防法",
+   "short": "法",
+   "law_num": "昭和二十三年法律第百八十六号",
+   "enforcement_date": "2025-06-01",
+   "last_amendment_date": "2022-06-17",
+   "source_url": "https://laws.e-gov.go.jp/law/323AC1000000186",
+   "article_count": 263,
+   "file": "data/laws/323AC1000000186.json"
+  },
+  {
+   "law_id": "336CO0000000037",
+   "law_title": "消防法施行令",
+   "short": "令",
+   "law_num": "昭和三十六年政令第三十七号",
+   "enforcement_date": "2025-10-01",
+   "last_amendment_date": "2025-03-26",
+   "source_url": "https://laws.e-gov.go.jp/law/336CO0000000037",
+   "article_count": 92,
+   "file": "data/laws/336CO0000000037.json"
+  },
+  {
+   "law_id": "336M50000008006",
+   "law_title": "消防法施行規則",
+   "short": "規則",
+   "law_num": "昭和三十六年自治省令第六号",
+   "enforcement_date": "2026-06-26",
+   "last_amendment_date": "2026-06-26",
+   "source_url": "https://laws.e-gov.go.jp/law/336M50000008006",
+   "article_count": 188,
+   "file": "data/laws/336M50000008006.json"
+  },
+  {
+   "law_id": "325AC0000000201",
+   "law_title": "建築基準法",
+   "short": "建基法",
+   "law_num": "昭和二十五年法律第二百一号",
+   "enforcement_date": "2026-05-27",
+   "last_amendment_date": "2026-05-27",
+   "source_url": "https://laws.e-gov.go.jp/law/325AC0000000201",
+   "article_count": 291,
+   "file": "data/laws/325AC0000000201.json"
+  },
+  {
+   "law_id": "325CO0000000338",
+   "law_title": "建築基準法施行令",
+   "short": "建基令",
+   "law_num": "昭和二十五年政令第三百三十八号",
+   "enforcement_date": "2025-12-01",
+   "last_amendment_date": "2025-11-19",
+   "source_url": "https://laws.e-gov.go.jp/law/325CO0000000338",
+   "article_count": 371,
+   "file": "data/laws/325CO0000000338.json"
+  },
+  {
+   "law_id": "334CO0000000306",
+   "law_title": "危険物の規制に関する政令",
+   "short": "危政令",
+   "law_num": "昭和三十四年政令第三百六号",
+   "enforcement_date": "2026-04-04",
+   "last_amendment_date": "2026-04-03",
+   "source_url": "https://laws.e-gov.go.jp/law/334CO0000000306",
+   "article_count": 73,
+   "file": "data/laws/334CO0000000306.json"
+  }
+ ]
+}
