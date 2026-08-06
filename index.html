@@ -209,6 +209,24 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 
 .empty{text-align:center;color:var(--bark-light);font-size:13px;padding:26px 12px;line-height:1.9}
 
+/* ---------- 共有前の注意喚起 ---------- */
+.attn{
+  background:rgba(192,113,79,.12);border-left:3px solid var(--terra);
+  border-radius:var(--radius-sm);padding:8px 10px;margin:8px 0 0;
+  font-size:11.5px;color:var(--bark);line-height:1.75;
+}
+.attn strong{color:var(--terra)}
+.attn .tok{
+  display:inline-block;background:var(--terra-pale);border-radius:var(--radius-xl);
+  padding:1px 8px;margin:2px 3px 0 0;font-size:11px;color:var(--bark);
+}
+.attn-sum{
+  background:rgba(192,113,79,.14);border:1px solid rgba(192,113,79,.4);
+  border-radius:var(--radius-md);padding:11px 13px;margin-bottom:12px;
+  font-size:12.5px;color:var(--bark);line-height:1.8;
+}
+.memo.flagged{border-left:3px solid var(--terra)}
+
 /* ---------- AI解説 ---------- */
 .ai{
   background:linear-gradient(180deg,rgba(138,174,141,.13),rgba(138,174,141,.05));
@@ -391,6 +409,11 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div class="card">
         <h3>データの保存先</h3>
         <div id="sync-status" class="muted"></div>
+        <div class="disclaimer">
+          査察メモは<strong>この端末のブラウザ内にのみ</strong>保存され、リポジトリには入りません。
+          固有名詞や所属固有の運用に触れる記述があるメモには、一覧と編集画面で
+          <strong>⚠ の注意表示</strong>が出ます。書き出し・印刷・同期の前に確認してください。
+        </div>
         <div class="row" style="margin-top:10px">
           <button class="btn sec sm" onclick="openFirebaseSetup()">Firebase同期を設定</button>
           <button class="btn sec sm" onclick="importMemos()">⬆ 読み込み</button>
@@ -1007,14 +1030,15 @@ function openMemoEditor(id){
    '<button class="close" onclick="closeModal()">✕</button>' +
    '<h3>' + (m ? 'メモを編集' : '新しいメモ') + '</h3>' +
    '<label class="fld">対象物（仮名で記録することを勧めます）</label>' +
-   '<input type="text" id="m-name" placeholder="例：A商店ビル" value="' + esc(m ? m.name : '') + '">' +
+   '<input type="text" id="m-name" placeholder="例：A商店ビル" oninput="checkMemoInput()" value="' + esc(m ? m.name : '') + '">' +
    '<label class="fld">用途区分</label><select id="m-yoto">' + yotoOpts + '</select>' +
    '<label class="fld">検査日</label>' +
    '<input type="date" id="m-date" value="' + esc(m ? m.date : new Date().toISOString().slice(0,10)) + '">' +
    '<label class="fld">指摘事項</label>' +
-   '<textarea class="f" id="m-text" placeholder="発見した事項">' + esc(m ? m.text : '') + '</textarea>' +
+   '<textarea class="f" id="m-text" placeholder="発見した事項" oninput="checkMemoInput()">' + esc(m ? m.text : '') + '</textarea>' +
    '<label class="fld">根拠法令（自由記述）</label>' +
-   '<textarea class="f" id="m-refs" placeholder="例：法第8条第1項、令第1条の2">' + esc(m ? m.refs : '') + '</textarea>' +
+   '<textarea class="f" id="m-refs" placeholder="例：法第8条第1項、令第1条の2" oninput="checkMemoInput()">' + esc(m ? m.refs : '') + '</textarea>' +
+   '<div id="m-attn"></div>' +
    '<label class="fld">是正状況</label>' +
    '<select id="m-status">' +
      ['open:未是正','doing:是正中','done:是正済'].map(s => {
@@ -1028,6 +1052,16 @@ function openMemoEditor(id){
      (m ? '<button class="btn warn sm" onclick="deleteMemo(\'' + m.id + '\')">削除</button>' : '') +
    '</div>';
   openModal(html);
+}
+
+/* 入力中に、共有すると問題になりうる記述を知らせる */
+function checkMemoInput(){
+  const box = document.getElementById('m-attn');
+  if (!box) return;
+  const text = ['m-name', 'm-text', 'm-refs']
+    .map(id => (document.getElementById(id) || {}).value || '').join('\n');
+  const hits = detectSensitiveMemo(text);
+  box.innerHTML = hits.length ? attnBlock(hits) : '';
 }
 
 function saveMemo(id){
@@ -1069,8 +1103,12 @@ function renderMemos(){
     return;
   }
   const label = { open:'未是正', doing:'是正中', done:'是正済' };
-  box.innerHTML = list.map(m =>
-    '<div class="memo">' +
+  let flaggedCount = 0;
+
+  const cards = list.map(m => {
+    const hits = detectSensitiveMemo(memoSensitiveText(m));
+    if (hits.length) flaggedCount++;
+    return '<div class="memo' + (hits.length ? ' flagged' : '') + '">' +
       '<div class="top"><div>' +
         '<div class="name">' + esc(m.name || '（対象物名なし）') + '</div>' +
         '<div><span class="status ' + esc(m.status) + '">' + esc(label[m.status] || '') + '</span>' +
@@ -1078,11 +1116,30 @@ function renderMemos(){
       '</div><div class="date">' + esc(m.date) + '</div></div>' +
       '<div class="txt">' + esc(m.text) + '</div>' +
       (m.refs ? '<div class="refs">📘 ' + esc(m.refs) + '</div>' : '') +
+      (hits.length ? attnBlock(hits) : '') +
       '<div class="acts no-print">' +
         '<button class="btn sec sm" onclick="openMemoEditor(\'' + m.id + '\')">編集</button>' +
         '<button class="btn sec sm" onclick="searchFromMemo(\'' + m.id + '\')">根拠を調べる</button>' +
       '</div>' +
-    '</div>').join('');
+    '</div>';
+  }).join('');
+
+  const summary = flaggedCount
+    ? '<div class="attn-sum">⚠ <strong>' + flaggedCount + '件</strong>のメモに、' +
+      '固有名詞や所属固有の運用に触れる記述が見つかりました。<br>' +
+      '端末内に置いておく分には問題ありませんが、<strong>書き出し・印刷・同期で外に出るとき</strong>は' +
+      '内容をご確認ください。立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはなりません' +
+      '（消防法第4条第4項）。</div>'
+    : '';
+
+  box.innerHTML = summary + cards;
+}
+
+function attnBlock(hits){
+  return '<div class="attn no-print"><strong>⚠ 共有前に確認</strong>' +
+    '（自動判定。端末内に保存する分には支障ありません）<br>' +
+    hits.slice(0, 10).map(h => '<span class="tok">' + esc(h.token) + '｜' + esc(h.label) + '</span>').join('') +
+    '</div>';
 }
 
 function searchFromMemo(id){
@@ -1119,7 +1176,15 @@ function memoFromResult(){
 }
 
 function exportMemos(){
-  const blob = new Blob([JSON.stringify({ app:'sasatsu-ai', version:4, memos:getMemos() }, null, 1)],
+  const memos = getMemos();
+  const flagged = memos.filter(m => detectSensitiveMemo(memoSensitiveText(m)).length);
+  if (flagged.length){
+    const ok = confirm(
+      flagged.length + '件のメモに、固有名詞や所属固有の運用に触れる記述が含まれています。\n' +
+      'このファイルは端末の外に出ます。書き出しますか？');
+    if (!ok) return;
+  }
+  const blob = new Blob([JSON.stringify({ app:'sasatsu-ai', version:4, memos }, null, 1)],
     { type:'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -1194,16 +1259,59 @@ const PII_SAFE = new Set([
   '指定都市','中核市','政令指定都市','市区町村'
 ]);
 
+/* 所属固有の運用や、事案が特定できる記述の手がかり。
+   査察メモは端末内に留まるが、Firebase同期・書き出し・印刷で外に出うるため、
+   書いた本人が気づけるように印を付ける。 */
+const INTERNAL_PATTERNS = [
+  { re:/当本部|当署|当消防本部|当市|当町|当村|本市|本町|本村|わが市|うちの(?:本部|署)/g,
+    label:'所属を指す語' },
+  { re:/内規|申し?合わせ|申合せ|運用指針|運用基準|事務処理要領|事務処理基準|査察規程|予防規程集|例規集/g,
+    label:'内部運用の呼称' },
+  { re:/[一-龥]{2,4}(?:氏|さん|様)|代表者[^、。\s]{0,8}|担当者[^、。\s]{0,8}/g,
+    label:'人名らしき語' },
+  { re:/事案番号|受理番号|整理番号|台帳番号|第\d{1,5}号事案/g,
+    label:'事案を特定する番号' }
+];
+
+/** 長い語に含まれる短い語は落とす（「サンライズ本町ビル」と「本町」を両方出さない） */
+function dedupeTokens(found){
+  return found.filter(f =>
+    !found.some(o => o !== f && o.token.length > f.token.length && o.token.includes(f.token)));
+}
+
+/** メモ用：固有名詞（PII）と所属固有の記述をまとめて検知する */
+function detectSensitiveMemo(text){
+  const found = detectPersonalInfo(text);
+  for (const p of INTERNAL_PATTERNS){
+    for (const m of String(text || '').matchAll(p.re)){
+      const token = m[0].trim();
+      if (!token) continue;
+      if (!found.some(f => f.token === token)) found.push({ token, label: p.label });
+    }
+  }
+  return dedupeTokens(found);
+}
+
+function memoSensitiveText(m){
+  return [m.name, m.text, m.refs].filter(Boolean).join('\n');
+}
+
+/* 「A商店ビル」「甲ビル」のような仮名は、こちらが推奨している書き方なので警告しない。
+   英字1〜2文字か甲乙丙…で始まる短い名称を仮名とみなす。 */
+const PSEUDONYM_RE = /^(?:[A-Za-z]{1,2}|[甲乙丙丁戊己庚辛])[^、。\s]{0,10}$/;
+const PSEUDONYM_OK_LABELS = new Set(['建物名らしき語', '法人名']);
+
 function detectPersonalInfo(text){
   const found = [];
   for (const p of PII_PATTERNS){
     for (const m of String(text || '').matchAll(p.re)){
       const token = m[0].trim();
       if (!token || PII_SAFE.has(token)) continue;
+      if (PSEUDONYM_OK_LABELS.has(p.label) && PSEUDONYM_RE.test(token)) continue;
       if (!found.some(f => f.token === token)) found.push({ token, label: p.label });
     }
   }
-  return found;
+  return dedupeTokens(found);
 }
 
 /**
@@ -1406,7 +1514,12 @@ const Sync = {
 function updateSyncStatus(extra){
   const el = document.getElementById('sync-status');
   if (!el) return;
-  if (Sync.enabled) el.textContent = '✅ Firebaseと同期中（PC・スマホで同じ内容になります）';
+  if (Sync.enabled){
+    const flagged = getMemos().filter(m => detectSensitiveMemo(memoSensitiveText(m)).length).length;
+    el.innerHTML = '✅ Firebaseと同期中（PC・スマホで同じ内容になります）' +
+      (flagged ? '<div class="attn">⚠ 同期対象のうち<strong>' + flagged + '件</strong>に固有名詞や' +
+        '所属固有の記述があります。クラウドに保存されている状態です。</div>' : '');
+  }
   else if (Sync.getConfig()) el.textContent = 'Firebase設定済み・未ログインです。' + (extra || '');
   else el.textContent = 'この端末のブラウザにのみ保存しています（同期なし）。' + (extra || '');
 }
