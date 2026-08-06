@@ -405,6 +405,13 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
           法令データは政府標準利用規約（第2.0版）／CC BY 4.0 互換のもとで利用しています。
         </div>
         <div class="disclaimer">
+          <strong>加工の明示：</strong>本アプリは e-Gov法令検索が提供する法令データを、
+          条単位に分解して再構成したうえで表示しています。火災予防条例は自治体の例規集から取得し、
+          自治体を特定できる情報をマスクする加工を行っています。
+          <strong>これらの加工は本アプリの作成者が独自に行ったものであり、内容について国・自治体が
+          保証したものではありません。</strong>
+        </div>
+        <div class="disclaimer">
           <strong>本ツールは法解釈の最終判断を行うものではありません。</strong>
           提示される根拠法令は実務上の一般的な整理であり、個々の事案への当てはめと最終的な判断は
           利用者本人が行ってください。
@@ -523,6 +530,8 @@ function buildIndex(){
     }
   }
 
+  buildOrdinanceIndex();
+
   // 辞書：指摘辞書のキーワード＋用途名＋条見出しの語
   const dict = new Set();
   for (const e of DB.findings.entries){
@@ -542,6 +551,26 @@ function buildIndex(){
   DB.dict = [...dict].filter(Boolean).sort((a, b) => b.length - a.length);
 }
 
+/* 匿名化済みの火災予防条例を、法令と同じ形で検索対象に加える。
+   条例には e-Gov のリンクが無いので url は空にし、表示側で出典の書き方を変える。 */
+function buildOrdinanceIndex(){
+  if (!DB.ords || !Array.isArray(DB.ords.ordinances)) return;
+  for (const ord of DB.ords.ordinances){
+    for (const a of ord.articles || []){
+      if (!a.title || !a.text) continue;
+      DB.articles.push({
+        lawId: 'ord:' + ord.id, lawTitle: ord.title, short: '条例', isOrd: true,
+        muniType: ord.muni_type || '',
+        enforcement: '', fetched: DB.ords.generated_at, sourceUrl: '',
+        title: a.title, caption: '', crumbs: [], url: '',
+        paras: [{ num: '1', text: a.text }],
+        nTitle: normalize(a.title), nCaption: '', nCrumbs: '', nBody: normalize(a.text),
+        num: parseArticleNumber(a.title)
+      });
+    }
+  }
+}
+
 /* 「第三十三条の二」→ {n:33, br:[2]} */
 const KANJI = { '〇':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
 const KUNIT = { '十':10,'百':100,'千':1000 };
@@ -555,14 +584,20 @@ function kanjiToInt(s){
   }
   return seen ? total + cur : null;
 }
+/* 法令は漢数字、条例は算用数字で書かれているので両方受ける */
+function numOf(s){
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  return kanjiToInt(s);
+}
 function parseArticleNumber(title){
-  const m = /^第([〇一二三四五六七八九十百千]+)条((?:の[〇一二三四五六七八九十百千]+)*)$/.exec(title || '');
+  const K = '[〇一二三四五六七八九十百千]+|\\d+';
+  const m = new RegExp('^第(' + K + ')条((?:の(?:' + K + '))*)$').exec(title || '');
   if (!m) return null;
-  const n = kanjiToInt(m[1]);
+  const n = numOf(m[1]);
   if (n === null) return null;
   const br = [];
-  for (const bm of (m[2] || '').matchAll(/の([〇一二三四五六七八九十百千]+)/g)){
-    const v = kanjiToInt(bm[1]);
+  for (const bm of (m[2] || '').matchAll(/の([〇一二三四五六七八九十百千]+|\d+)/g)){
+    const v = numOf(bm[1]);
     if (v === null) return null;
     br.push(v);
   }
@@ -575,6 +610,7 @@ function parseArticleNumber(title){
 /* 「建基令」が「令」に、「建築基準法」が「法」に食われないよう、
    長く具体的な略称から順に判定する。 */
 const LAW_ALIAS = [
+  { re:/(火災予防条例|条例)/,            id:'ord' },
   { re:/(建築基準法施行令|建基令)/,       id:'325CO0000000338' },
   { re:/(建築基準法|建基法)/,            id:'325AC0000000201' },
   { re:/(危険物の規制に関する政令|危政令)/, id:'334CO0000000306' },
@@ -599,7 +635,9 @@ function parseArticleQuery(raw){
 
 function matchArticleNumber(a, spec){
   if (!a.num) return false;
-  if (spec.lawId && a.lawId !== spec.lawId) return false;
+  if (spec.lawId === 'ord'){ if (!a.isOrd) return false; }
+  else if (spec.lawId && a.lawId !== spec.lawId) return false;
+  else if (!spec.lawId && a.isOrd) return false;   // 法令名の指定なしなら条例は出さない
   if (a.num.n !== spec.n) return false;
   if (spec.br.length === 0) return true;
   if (a.num.br.length < spec.br.length) return false;
@@ -681,6 +719,7 @@ function badgeClass(short){
   if (short === '令') return '';
   if (short === '規則') return 'rule';
   if (short === '危政令') return 'kiken';
+  if (short === '条例') return 'ord';
   return 'kenchiku';
 }
 function fmtDate(iso){ return (iso || '').slice(0, 10); }
@@ -713,8 +752,11 @@ function renderArticle(a, point){
     '<button class="toggle-body no-print" onclick="toggleBody(\'' + id + '\',this)">条文を表示 ▾</button>' +
     '<div class="body" id="' + id + '">' + body + '</div>' +
     '<div class="foot">' +
-      '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
-      '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>' +
+      (a.isOrd
+        ? '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
+          '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>'
+        : '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+          '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>') +
     '</div>' +
   '</div>';
 }
@@ -811,6 +853,8 @@ function runShiteki(){
       if (e.ordinance){
         html += '<div class="note">📕 この指摘は火災予防条例に基準が委任されている部分があります。' +
           '所属の条例本文を必ず併せて確認してください。' + ordHint() + '</div>';
+        const ordHits = ordinanceHitsFor(e, raw);
+        for (const oa of ordHits) html += renderArticle(oa, '条例側の該当箇所（候補）');
       }
       html += '</div>';
     });
@@ -837,6 +881,26 @@ function runShiteki(){
   box.innerHTML = html;
   state.lastResult = { raw, entries: scored.map(x => x.e), yoto, extra: rest.map(r => r.art) };
   window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+/* 条例に基準が委任されている指摘について、条例側の候補条文を拾う */
+function ordinanceHitsFor(entry, raw){
+  const ordArts = DB.articles.filter(a => a.isOrd);
+  if (!ordArts.length) return [];
+  const terms = [...new Set(entry.keywords.concat(extractTerms(raw)).map(normalize))]
+    .filter(t => t.length >= 2);
+  if (!terms.length) return [];
+  const scored = [];
+  for (const a of ordArts){
+    let s = 0, matched = 0;
+    for (const t of terms){
+      const hits = countOccurrences(a.nBody, t, 3);
+      if (hits){ s += Math.min(t.length, 6) * (1 + hits * 0.4); matched++; }
+    }
+    if (matched >= 1) scored.push({ a, s: s * (1 + (matched - 1) * 0.5) });
+  }
+  scored.sort((x, y) => y.s - x.s);
+  return scored.slice(0, 3).map(x => x.a);
 }
 
 function ordHint(){
@@ -904,9 +968,14 @@ function runJobun(){
 
 function renderLawChips(){
   const wrap = document.getElementById('law-chips');
-  wrap.innerHTML = DB.index.laws.map(l =>
+  let html = DB.index.laws.map(l =>
     '<button class="chip" data-law="' + l.law_id + '" onclick="toggleLawFilter(\'' + l.law_id + '\')">' +
     esc(l.short) + '</button>').join('');
+  for (const ord of (DB.ords && DB.ords.ordinances) || []){
+    const id = 'ord:' + ord.id;
+    html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">条例</button>';
+  }
+  wrap.innerHTML = html;
 }
 function toggleLawFilter(id){
   if (state.lawFilter.has(id)) state.lawFilter.delete(id); else state.lawFilter.add(id);
@@ -1103,6 +1172,75 @@ function updateApiStatus(){
     getApiKey() ? '✅ 登録済み（AI解説が使えます）' : '未登録（ローカル検索のみで動作します）';
 }
 
+/* ---------------------------------------------------------------
+   送信前のガードレール
+   立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはならない
+   （消防法第4条第4項）。外部送信の前に必ず内容を確認できるようにする。
+   --------------------------------------------------------------- */
+/* 助詞・記号は語の切れ目とみなし、警告に余計な文字が混ざらないようにする */
+const PII_STOP = '、。，．・「」（）()\\s のはがをにでとやもへよりからまで';
+const PII_PATTERNS = [
+  { re:/[一-龥ァ-ヶー々]{1,6}(?:市|町|村|区)(?![域分画内間場政策民])/g, label:'自治体名らしき語' },
+  { re:new RegExp('(?:株式会社|有限会社|合同会社|㈱|㈲)[^' + PII_STOP + ']{0,14}', 'g'), label:'法人名' },
+  { re:new RegExp('[^' + PII_STOP + ']{1,12}(?:ビル|マンション|ハイツ|コーポ|荘|会館|団地)', 'g'), label:'建物名らしき語' },
+  { re:/\d{2,4}-\d{2,4}-\d{3,4}/g,                                     label:'電話番号らしき数字' },
+  { re:/〒?\d{3}-\d{4}/g,                                              label:'郵便番号' },
+  { re:/[一-龥]{1,3}[都道府県][^、。\s]{0,10}[市区町村][^、。\s]{0,12}\d/g, label:'住所らしき記述' }
+];
+
+/* 一般的な法令用語は自治体名ではない */
+const PII_SAFE = new Set([
+  '市町村','都道府県','各市町村','当該市町村','市街','都市','町内','村落','特別区',
+  '指定都市','中核市','政令指定都市','市区町村'
+]);
+
+function detectPersonalInfo(text){
+  const found = [];
+  for (const p of PII_PATTERNS){
+    for (const m of String(text || '').matchAll(p.re)){
+      const token = m[0].trim();
+      if (!token || PII_SAFE.has(token)) continue;
+      if (!found.some(f => f.token === token)) found.push({ token, label: p.label });
+    }
+  }
+  return found;
+}
+
+/**
+ * 送信内容を見せて同意を取る。OKなら resolve(true)。
+ * userText には利用者が自分で打った文字だけを渡す（条文には市町村長等が頻出するため）。
+ */
+function confirmSend(payload, userText){
+  return new Promise((resolve) => {
+    const risky = detectPersonalInfo(userText);
+    let html = '<button class="close" onclick="closeModal();__sendResolve(false)">✕</button>' +
+      '<h3>この内容を送信します</h3>' +
+      '<div class="muted">送信先は Anthropic（Claude API）です。送信されるのは下の全文だけで、' +
+      '査察メモは含まれません。</div>';
+
+    if (risky.length){
+      html += '<div class="disclaimer"><strong>固有名詞らしい語が含まれています。</strong><br>' +
+        risky.slice(0, 8).map(r => '「' + esc(r.token) + '」（' + esc(r.label) + '）').join('　') +
+        '<br>立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはなりません（消防法第4条第4項）。' +
+        '事業所名・所在地・関係者名が入っている場合は、閉じて入力から消してください。</div>';
+    } else {
+      html += '<div class="disclaimer">入力文に固有名詞らしき語は見つかりませんでした。' +
+        'ただし自動判定なので、最終確認はご自身でお願いします。</div>';
+    }
+
+    html += '<label class="fld">送信する全文</label>' +
+      '<textarea class="f" readonly style="min-height:190px;font-size:12.5px">' + esc(payload) + '</textarea>' +
+      '<div class="row" style="margin-top:14px">' +
+        '<button class="btn' + (risky.length ? ' warn' : '') + '" onclick="closeModal();__sendResolve(true)">' +
+          (risky.length ? 'それでも送信する' : '送信する') + '</button>' +
+        '<button class="btn sec" onclick="closeModal();__sendResolve(false)">やめる</button>' +
+      '</div>';
+
+    window.__sendResolve = (ok) => { window.__sendResolve = () => {}; resolve(ok); };
+    openModal(html);
+  });
+}
+
 async function askClaude(prompt){
   const key = getApiKey();
   if (!key) throw new Error('nokey');
@@ -1152,7 +1290,6 @@ async function explainShiteki(){
       'キーが無くても検索と条文表示はそのまま使えます。</div>';
     return;
   }
-  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
   const arts = [];
   for (const e of r.entries) for (const ref of e.refs){
     const a = findArticle(ref.law_id, ref.article);
@@ -1164,6 +1301,9 @@ async function explainShiteki(){
     '【候補として抽出された条文】\n' + arts.slice(0, 6).join('\n---\n') + '\n\n' +
     'この指摘がどの条文のどの部分に当たるのか、確認すべき順序が分かるように説明してください。' +
     '判断が分かれうる点があれば、その分かれ目も示してください。';
+
+  if (!await confirmSend(prompt, r.raw)) return;
+  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
   try {
     box.innerHTML = '<div class="ai"><span class="lbl">AI解説（実務上の一般的な解釈）</span>' +
       esc(await askClaude(prompt)) + '</div>';
@@ -1182,10 +1322,12 @@ async function explainJobun(){
       '設定タブでAPIキーを登録すると解説を表示できます。</div>';
     return;
   }
-  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
   const prompt = '【調べている語句】' + r.raw + '\n【関連する条文】\n' +
     r.arts.map(a => articleDigest(a, 600)).join('\n---\n') +
     '\n\nこの語句が法令上どう位置づけられているのかを、査察実務でどこを見ればよいかが分かるように説明してください。';
+
+  if (!await confirmSend(prompt, r.raw)) return;
+  box.innerHTML = '<div class="ai"><span class="lbl">AI解説</span>作成中です…</div>';
   try {
     box.innerHTML = '<div class="ai"><span class="lbl">AI解説（実務上の一般的な解釈）</span>' +
       esc(await askClaude(prompt)) + '</div>';
@@ -1394,9 +1536,22 @@ function renderFreshness(){
     '<div class="muted" style="margin-top:8px">最終取得日：' + esc(fmtDate(DB.index.fetched_at)) + '</div>';
 
   const os = document.getElementById('ord-status');
-  const n = DB.ords && DB.ords.ordinances ? DB.ords.ordinances.length : 0;
-  os.textContent = n ? ('匿名化済みの条例を ' + n + '件収録しています。')
-                     : '条例データはまだ入っていません。';
+  const ords = (DB.ords && DB.ords.ordinances) || [];
+  if (!ords.length){
+    os.textContent = '条例データはまだ入っていません。';
+    return;
+  }
+  os.innerHTML = ords.map(o =>
+    '<div style="margin:7px 0;font-size:13px">' +
+      '<span class="badge ord">条例</span>' + esc(o.title) +
+      (o.muni_type ? '（類型：' + esc(o.muni_type) + '）' : '') +
+      '<div class="muted">本則 ' + (o.article_count || 0) + '条／自治体名 ' +
+      ((o.masked_counts && o.masked_counts['自治体名']) || 0) + '件・消防本部等 ' +
+      ((o.masked_counts && o.masked_counts['消防本部等']) || 0) + '件・様式番号 ' +
+      ((o.masked_counts && o.masked_counts['様式・要綱番号']) || 0) + '件をマスク済み</div>' +
+    '</div>').join('') +
+    '<div class="muted" style="margin-top:6px">附則の経過措置は含めていません。取り込み日：' +
+    esc(fmtDate(DB.ords.generated_at)) + '</div>';
 }
 
 function initUI(){

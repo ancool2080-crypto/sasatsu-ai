@@ -43,11 +43,25 @@ GENERIC_TERMS = {
 # 自治体名を含みやすい語のパターン（人が確認するための候補抽出用）。
 # 地名の語幹は漢字・カタカナが大半なので接頭辞をそれらに限定する。
 # 「市街地」「区域」のような一般語を拾わないよう、直後の文字で足切りする。
+#
+# 「都・道・府」を一般の接尾辞として扱うと「風道」「水道」「隧道」「総理府」まで拾ってしまうため、
+# 該当する自治体が実在する組み合わせだけを列挙する。
 CANDIDATE_RE = re.compile(
-    r"[一-龥ァ-ヶー々]{1,5}(?:都|道|府|県|市|区|町|村)(?![町村民街域分画内間場政策])"
+    r"(?:東京都|北海道|大阪府|京都府)"
+    r"|[一-龥ァ-ヶー々]{1,5}(?:県|市|区|町|村)(?![町村民街域分画内間場政策])"
 )
-ORG_RE = re.compile(r"([一-龥ァ-ヶー々]{1,8})(消防局|消防本部|消防署|消防団|出張所)")
+# 「〇〇市外三町消防組合」のような一部事務組合名も自治体を特定するので対象に入れる
+ORG_RE = re.compile(
+    r"([一-龥ァ-ヶー々]{1,10})"
+    r"(消防局|消防本部|消防署|消防団|消防組合|消防事務組合|広域行政組合|出張所)"
+)
 FORM_RE = re.compile(r"(?:様式|要綱|要領|告示|訓令)第?[〇一二三四五六七八九十百千0-9０-９]+号?")
+
+# 「平成14年消防庁告示第1号」のような国の基準は、自治体を特定しないうえに実務上必須なので残す。
+# マスク対象は自治体独自の様式・要綱・告示に限る。
+NATIONAL_BODY_RE = re.compile(
+    r"(消防庁|総務省|総務大臣|自治省|国土交通省|建設省|厚生労働省|厚生省|経済産業省|通商産業省|内閣府|環境省)$"
+)
 
 # 消防本部等の直前に付いても自治体名ではない語。マスクせずそのまま残す。
 GENERIC_ORG_PREFIX = {"当該", "他", "各", "管轄", "所轄", "最寄"}
@@ -91,6 +105,9 @@ def anonymize(text, name_pattern):
         text = name_pattern.sub(mask_name, text)
 
     def mask_form(m):
+        # 直前が国の機関名なら、国の告示等なのでそのまま残す
+        if NATIONAL_BODY_RE.search(m.string[:m.start()][-8:]):
+            return m.group(0)
         counts["様式・要綱番号"] += 1
         return MASK_FORM
 
@@ -108,11 +125,15 @@ def anonymize(text, name_pattern):
 
 
 def split_articles(text):
-    """「第◯条」で条文単位に分割する。見出しが無ければ全体を1件として扱う。"""
+    """「第◯条」で条文単位に分割する。見出しが無ければ全体を1件として扱う。
+
+    例規集は算用数字（第3条の2）で書かれていることが多いので、漢数字と両方受ける。
+    """
     lines = text.replace("\r\n", "\n").split("\n")
     articles = []
     current = None
-    heading = re.compile(r"^\s*(第[〇一二三四五六七八九十百千]+条(?:の[〇一二三四五六七八九十百千]+)*)")
+    num = r"[〇一二三四五六七八九十百千0-9]+"
+    heading = re.compile(r"^\s*(第{n}条(?:の{n})*)".format(n=num))
 
     for line in lines:
         m = heading.match(line)
@@ -161,6 +182,9 @@ def main():
 
         articles = []
         for article in split_articles(masked):
+            # 条見出しの付かない塊（章見出しなど）は条文ではないので落とす
+            if not article["title"]:
+                continue
             articles.append({
                 "title": article["title"],
                 "text": article["text"],
