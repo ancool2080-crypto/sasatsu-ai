@@ -171,9 +171,14 @@ def extract_pdf_pages(path):
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages, start=1):
             raw = page.extract_text() or ""
-            lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
-            # 目次の行（・・・でページ番号に繋ぐ行）はノイズになりやすいので落とす
-            lines = [ln for ln in lines if not re.search(r"[・･]{6,}", ln)]
+            raw_lines = [ln.strip() for ln in raw.split("\n") if ln.strip()]
+
+            # 目次は「・・・」でページ番号に繋ぐ行が並ぶ。見出し語を全部含むため
+            # 検索で本文より上位に来てしまうので、印を付けて索引から外す。
+            dotted = sum(1 for ln in raw_lines if re.search(r"[・･]{6,}", ln))
+            is_toc = dotted >= 4
+
+            lines = [ln for ln in raw_lines if not re.search(r"[・･]{6,}", ln)]
             for ln in lines[:6]:
                 if heading_re.match(ln):
                     current_heading = ln
@@ -181,7 +186,10 @@ def extract_pdf_pages(path):
             text = "\n".join(lines)
             if not text.strip():
                 continue
-            pages.append({"page": i, "heading": current_heading, "text": text})
+            entry = {"page": i, "heading": current_heading, "text": text}
+            if is_toc:
+                entry["toc"] = True
+            pages.append(entry)
     return pages
 
 

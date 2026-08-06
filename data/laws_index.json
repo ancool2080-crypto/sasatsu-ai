@@ -1,5 +1,5 @@
 {
- "fetched_at": "2026-08-06T11:54:15+09:00",
+ "fetched_at": "2026-08-06T16:07:03+09:00",
  "source": "e-Gov法令検索 法令API Version 2",
  "source_url": "https://laws.e-gov.go.jp/",
  "license": "政府標準利用規約(第2.0版) / CC BY 4.0 互換",
@@ -69,6 +69,28 @@
    "source_url": "https://laws.e-gov.go.jp/law/334CO0000000306",
    "article_count": 73,
    "file": "data/laws/334CO0000000306.json"
+  },
+  {
+   "law_id": "405AC0000000088",
+   "law_title": "行政手続法",
+   "short": "行手法",
+   "law_num": "平成五年法律第八十八号",
+   "enforcement_date": "2026-07-24",
+   "last_amendment_date": "2026-07-24",
+   "source_url": "https://laws.e-gov.go.jp/law/405AC0000000088",
+   "article_count": 48,
+   "file": "data/laws/405AC0000000088.json"
+  },
+  {
+   "law_id": "323AC0000000043",
+   "law_title": "行政代執行法",
+   "short": "代執行法",
+   "law_num": "昭和二十三年法律第四十三号",
+   "enforcement_date": "1962-10-01",
+   "last_amendment_date": "1962-09-15",
+   "source_url": "https://laws.e-gov.go.jp/law/323AC0000000043",
+   "article_count": 6,
+   "file": "data/laws/323AC0000000043.json"
   }
  ]
 }

@@ -142,6 +142,48 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.ord{background:var(--bark)}
 .badge.fdma{background:var(--sage)}
 
+/* ---------- 防火管理者・執行手続き ---------- */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){ .row2{grid-template-columns:1fr} }
+.checkline{
+  display:flex;align-items:center;gap:8px;margin-top:12px;
+  font-size:13px;color:var(--ink-soft);line-height:1.6;cursor:pointer;
+}
+.checkline input{width:18px;height:18px;accent-color:var(--sage);flex:0 0 auto}
+.verdict{
+  border-radius:var(--radius-md);padding:14px 16px;margin-bottom:12px;
+  border:1px solid transparent;
+}
+.verdict.need{background:rgba(192,113,79,.13);border-color:rgba(192,113,79,.42)}
+.verdict.free{background:rgba(92,122,95,.13);border-color:rgba(92,122,95,.4)}
+.verdict .big{font-family:var(--font-serif);font-size:19px;font-weight:700;color:var(--ink);line-height:1.5}
+.verdict .sub{font-size:12.5px;color:var(--ink-soft);margin-top:7px;line-height:1.85}
+.kv{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.kv span{
+  background:var(--warm-white);border:1px solid var(--mist);border-radius:var(--radius-xl);
+  padding:3px 11px;font-size:11.5px;color:var(--ink-soft);
+}
+.stage{
+  border-left:2px solid var(--mist);padding:0 0 18px 16px;margin-left:8px;position:relative;
+}
+.stage:last-child{border-left-color:transparent;padding-bottom:4px}
+.stage::before{
+  content:'';position:absolute;left:-6px;top:3px;width:10px;height:10px;border-radius:50%;
+  background:var(--sage);border:2px solid var(--cream);
+}
+.stage .sname{font-family:var(--font-serif);font-size:15px;font-weight:700;color:var(--ink)}
+.stage .sdesc{font-size:12.5px;color:var(--ink-soft);line-height:1.9;margin-top:5px}
+.reflink{
+  display:inline-block;background:var(--warm-white);border:1px solid var(--sage-light);
+  border-radius:var(--radius-xl);padding:3px 11px;font-size:11.5px;
+  color:var(--sage-dark);text-decoration:none;
+}
+.reflink:hover{background:var(--terra-pale);border-color:var(--terra)}
+.stage .scaution{
+  background:rgba(200,154,62,.15);border-radius:var(--radius-sm);
+  padding:7px 10px;margin-top:8px;font-size:11.5px;color:var(--bark);line-height:1.75;
+}
+
 /* ---------- 条文カード ---------- */
 .art{
   background:var(--warm-white);border-left:3px solid var(--sage-light);
@@ -297,6 +339,8 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
   <nav class="nav-bar">
     <button class="nav-tab active" data-mod="shiteki" onclick="showModule('shiteki')"><span class="ico">🔎</span>指摘→根拠</button>
     <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><span class="ico">📖</span>条文検索</button>
+    <button class="nav-tab" data-mod="boka" onclick="showModule('boka')"><span class="ico">👤</span>防火管理者</button>
+    <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><span class="ico">⚖️</span>執行手続き</button>
     <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><span class="ico">📝</span>査察メモ</button>
     <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><span class="ico">⚙️</span>設定</button>
   </nav>
@@ -344,6 +388,44 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div id="jobun-result">
         <div class="empty">調べたい語句か条番号を入力してください。<br>「令10条」「消防法第8条」のような指定もできます。</div>
       </div>
+    </section>
+
+    <!-- ============ 防火管理者の判定 ============ -->
+    <section id="mod-boka" class="module">
+      <div class="card">
+        <h3>防火管理者の要否と甲種・乙種の判定</h3>
+        <div class="muted">令別表第一の項と収容人員・延べ面積から、選任義務の有無と資格の別を根拠条文つきで示します。</div>
+
+        <label class="fld">用途区分（令別表第一）</label>
+        <select id="bk-yoto" onchange="renderBokaSanteiHint();runBoka()"></select>
+
+        <div class="row2">
+          <div>
+            <label class="fld">収容人員（人）</label>
+            <input type="number" id="bk-nin" min="0" step="1" placeholder="例：45" oninput="runBoka()">
+          </div>
+          <div>
+            <label class="fld">延べ面積（㎡）</label>
+            <input type="number" id="bk-menseki" min="0" step="1" placeholder="例：420" oninput="runBoka()">
+          </div>
+        </div>
+
+        <label class="checkline"><input type="checkbox" id="bk-kengen" onchange="runBoka()">
+          管理について権原が分かれている（テナント・区分所有）</label>
+
+        <div id="bk-santei"></div>
+      </div>
+      <div id="boka-result"></div>
+    </section>
+
+    <!-- ============ 執行手続きの参照 ============ -->
+    <section id="mod-shikkou" class="module">
+      <div class="card">
+        <h3>立入検査・違反処理の進め方</h3>
+        <div class="muted">各段階の根拠条文と、標準マニュアルの該当箇所を並べます。実際の運用は所属の違反処理規程によります。</div>
+        <div class="chips" id="flow-chips" style="margin-top:12px"></div>
+      </div>
+      <div id="shikkou-result"></div>
     </section>
 
     <!-- ============ F2 査察メモ ============ -->
@@ -504,6 +586,8 @@ async function boot(){
 
     setProgress(88, '消防庁の通知・マニュアルを読み込み中…');
     DB.fdma = await getJSON('data/fdma.json').catch(() => null);
+    DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
+    DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
     setProgress(92, '検索用の索引を作成中…');
     buildIndex();
@@ -617,6 +701,7 @@ function buildFdmaIndex(){
 
   for (const doc of DB.fdma.documents || []){
     for (const p of doc.pages || []){
+      if (p.toc) continue;          // 目次は見出し語を全部含むので索引から外す
       DB.articles.push({
         lawId: 'fdma:' + doc.id, lawTitle: doc.title, short: '消防庁',
         isFdma: true, kind: 'マニュアル',
@@ -1777,6 +1862,245 @@ function renderFreshness(){
     esc(fmtDate(DB.ords.generated_at)) + '</div>';
 }
 
+/* =====================================================================
+   防火管理者の要否・甲種乙種の判定
+   消防法第8条第1項／令第1条の2第3項／令第3条第1項に基づく。
+   収容人員は規則第1条の3の算定方法を示したうえで利用者が入力する。
+   ===================================================================== */
+
+/** 令別表第一の項（「（六）項ロ」形式）を作る */
+function yotoKey(y, withBranch){
+  return y.kou + '項' + (withBranch ? y.branch : '');
+}
+
+/** 用途がどのルール（イ／ロ／ハ）に当たるかを返す */
+function bokaRuleFor(y){
+  if (!DB.boka) return null;
+  const withBranch = yotoKey(y, true);
+  const plain = yotoKey(y, false);
+  if (DB.boka.excluded_kou.includes(withBranch) || DB.boka.excluded_kou.includes(plain)) {
+    return { excluded: true };
+  }
+  for (const rule of DB.boka.rules){
+    const list = rule.kou.concat(rule.kou_conditional || []);
+    if (list.includes(withBranch) || list.includes(plain)) return { rule };
+  }
+  return null;
+}
+
+/** 規則第1条の3の表から、その用途の算定方法を探す */
+function santeiHouhouFor(y){
+  const art = findArticle('336M50000008006', '第一条の三');
+  if (!art) return null;
+  const rows = (art.paras[0] && art.paras[0].tables) || [];
+  const kou = y.kou;                       // 例：（六）
+  let lastLabel = '';
+  const out = [];
+  for (const cells of rows){
+    if (!cells.length) continue;
+    if (cells[0].includes('令別表第一')) lastLabel = cells[0];
+    const label = cells[0].includes('令別表第一') ? cells[0] : lastLabel;
+    if (!label.includes(kou)) continue;
+    // 最後のセルが算定方法。手前にサブ区分（遊技場／その他のもの）が入ることがある
+    const method = cells[cells.length - 1];
+    const subLabel = cells.length >= 3 ? cells[1] : (cells[0].includes('令別表第一') ? '' : cells[0]);
+    out.push({ label: label, sub: subLabel, method: method });
+  }
+  return out.length ? out : null;
+}
+
+function renderBokaSanteiHint(){
+  const box = document.getElementById('bk-santei');
+  const y = selectedBokaYoto();
+  if (!y){ box.innerHTML = ''; return; }
+  const santei = santeiHouhouFor(y);
+  if (!santei){ box.innerHTML = ''; return; }
+  box.innerHTML =
+    '<div class="note" style="margin-top:12px">' +
+      '<strong>収容人員の算定方法</strong>（規則第1条の3）<br>' +
+      santei.map(s =>
+        (s.sub ? '<em>' + esc(s.sub) + '</em><br>' : '') +
+        esc(s.method).replace(/\n/g, '<br>')).join('<hr style="border:none;border-top:1px solid var(--mist);margin:8px 0">') +
+    '</div>';
+}
+
+function selectedBokaYoto(){
+  const v = document.getElementById('bk-yoto').value;
+  if (v === '') return null;
+  return DB.yoto.items[Number(v)];
+}
+
+function runBoka(){
+  const box = document.getElementById('boka-result');
+  const y = selectedBokaYoto();
+  const nin = parseInt(document.getElementById('bk-nin').value, 10);
+  const area = parseFloat(document.getElementById('bk-menseki').value);
+  const kengen = document.getElementById('bk-kengen').checked;
+
+  if (!y){
+    box.innerHTML = '<div class="empty">用途区分を選ぶと判定します。</div>';
+    return;
+  }
+
+  const found = bokaRuleFor(y);
+  if (found && found.excluded){
+    box.innerHTML = '<div class="verdict free"><div class="big">選任義務の対象外です</div>' +
+      '<div class="sub">' + esc(y.label) + ' は、令第1条の2第3項第1号のかっこ書により' +
+      '防火管理者を定めなければならない防火対象物から除かれています。</div></div>' +
+      renderRefList(DB.boka.source_refs.slice(0, 2));
+    return;
+  }
+  if (!found){
+    box.innerHTML = '<div class="empty">この用途はルールに該当しませんでした。原典で確認してください。</div>';
+    return;
+  }
+
+  const rule = found.rule;
+  let html = '';
+
+  if (isNaN(nin)){
+    html += '<div class="verdict need"><div class="big">収容人員を入力してください</div>' +
+      '<div class="sub">' + esc(y.label.slice(0, 40)) + ' は <strong>' + rule.threshold + '人以上</strong>で' +
+      '防火管理者の選任が必要になります（' + esc(rule.ref) + '）。<br>' +
+      '上の算定方法にしたがって収容人員を出してから入力してください。</div></div>';
+    box.innerHTML = html;
+    return;
+  }
+
+  const need = nin >= rule.threshold;
+  if (!need){
+    html += '<div class="verdict free">' +
+      '<div class="big">防火管理者の選任義務はありません</div>' +
+      '<div class="sub">収容人員 ' + nin + '人は、' + esc(rule.ref) + ' の基準' +
+      '（' + rule.threshold + '人以上）に達していません。' +
+      '<br>ただし収容人員の算定に誤りがないか、用途の判定（従属的な部分・みなし従属）が' +
+      '適切かを確認してください。</div>' +
+      '<div class="kv"><span>' + esc(yotoKey(y, true)) + '</span>' +
+      '<span>収容人員 ' + nin + '人</span><span>基準 ' + rule.threshold + '人</span>' +
+      (y.tokutei ? '<span>★特定防火対象物</span>' : '') + '</div></div>';
+    box.innerHTML = html + renderRefList(DB.boka.source_refs);
+    return;
+  }
+
+  // 甲種・乙種の別
+  let kind, kindWhy;
+  if (rule.always_kousyu){
+    kind = '甲種';
+    kindWhy = esc(rule.kousyu_note);
+  } else if (isNaN(area)){
+    kind = '延べ面積の入力待ち';
+    kindWhy = '延べ面積が ' + rule.kousyu_area + '㎡以上なら甲種、未満なら乙種でも可です（令第3条第1項第2号）。';
+  } else if (area >= rule.kousyu_area){
+    kind = '甲種';
+    kindWhy = '延べ面積 ' + area + '㎡ が ' + rule.kousyu_area + '㎡以上のため甲種防火対象物です（令第3条第1項第1号）。';
+  } else {
+    kind = '乙種でも可';
+    kindWhy = '延べ面積 ' + area + '㎡ が ' + rule.kousyu_area + '㎡未満のため乙種防火対象物です（令第3条第1項第2号）。甲種の資格者でも差し支えありません。';
+  }
+
+  html += '<div class="verdict need">' +
+    '<div class="big">防火管理者の選任が必要です　／　' + esc(kind) + '</div>' +
+    '<div class="sub">収容人員 ' + nin + '人は、' + esc(rule.ref) + ' の基準（' + rule.threshold + '人以上）' +
+    'に達しています。<br>' + kindWhy + '</div>' +
+    '<div class="kv"><span>' + esc(yotoKey(y, true)) + '</span>' +
+    '<span>収容人員 ' + nin + '人</span>' +
+    (isNaN(area) ? '' : '<span>延べ面積 ' + area + '㎡</span>') +
+    (y.tokutei ? '<span>★特定防火対象物</span>' : '<span>非特定</span>') + '</div></div>';
+
+  // 併せて確認すること
+  const ups = DB.boka.follow_ups.filter(f =>
+    f.condition === 'always' ||
+    (f.condition === 'tokutei' && y.tokutei) ||
+    (f.condition === 'kengen' && kengen));
+
+  html += '<div class="card"><h3>併せて確認すること</h3>' +
+    ups.map(f => '<div style="margin:12px 0">' +
+      '<div style="font-weight:700;font-size:13.5px">' + esc(f.label) + '</div>' +
+      '<div class="muted" style="margin-top:3px">' + esc(f.text) + '</div>' +
+      renderRefList(f.refs) + '</div>').join('') +
+    '</div>';
+
+  html += '<div class="disclaimer">この判定は令別表第一の項・収容人員・延べ面積だけから機械的に出したものです。' +
+    '複合用途における従属的な部分の扱いや、同一敷地内の複数棟の扱いによって結論が変わります。' +
+    '最終的な判断は原典と所属の運用で確認してください。</div>';
+
+  box.innerHTML = html;
+}
+
+/** 条文参照のリンク一覧 */
+function renderRefList(refs){
+  if (!refs || !refs.length) return '';
+  const items = refs.map(r => {
+    const a = findArticle(r.law_id, r.article);
+    if (!a) return '';
+    return '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="reflink">' +
+      esc(a.short) + esc(a.title) + (r.point ? '（' + esc(r.point) + '）' : '') + ' ↗</a>';
+  }).filter(Boolean);
+  return items.length ? '<div class="kv" style="margin-top:8px">' + items.join('') + '</div>' : '';
+}
+
+/* =====================================================================
+   立入検査・違反処理の進め方
+   マニュアルのページは検索して解決するので、改訂しても追従する。
+   ===================================================================== */
+function renderFlowChips(){
+  const wrap = document.getElementById('flow-chips');
+  if (!DB.enf) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = DB.enf.flows.map((f, i) =>
+    '<button class="chip' + (i === 0 ? ' on' : '') + '" data-flow="' + esc(f.id) + '" ' +
+    'onclick="showFlow(\'' + esc(f.id) + '\')">' + esc(f.title) + '</button>').join('');
+}
+
+function showFlow(id){
+  document.querySelectorAll('#flow-chips .chip').forEach(c =>
+    c.classList.toggle('on', c.dataset.flow === id));
+  const flow = DB.enf.flows.find(f => f.id === id);
+  const box = document.getElementById('shikkou-result');
+  if (!flow){ box.innerHTML = ''; return; }
+
+  let html = '<div class="card"><h3>' + esc(flow.title) + '</h3>' +
+    '<div class="muted">根拠：' + esc(flow.manual_title) + '（消防庁）と関係法令</div>' +
+    '<div style="margin-top:16px">';
+
+  for (const st of flow.stages){
+    html += '<div class="stage">' +
+      '<div class="sname">' + esc(st.name) + '</div>' +
+      '<div class="sdesc">' + esc(st.desc) + '</div>' +
+      (st.caution ? '<div class="scaution">⚠ ' + esc(st.caution) + '</div>' : '') +
+      renderRefList(st.refs) +
+      renderManualLinks(flow.manual, st.keywords) +
+      '</div>';
+  }
+  html += '</div></div>';
+  html += '<div class="disclaimer">実際の運用は所属の違反処理規程によります。' +
+    '命令は不利益処分であり、要件・名宛人・履行期限・理由の提示を誤ると効力に影響します。' +
+    '各段階で必ず原典とマニュアルを確認してください。</div>';
+  box.innerHTML = html;
+}
+
+/** 段階の検索語から、標準マニュアルの該当ページを探してリンクにする */
+function renderManualLinks(manualId, keywords){
+  const pages = DB.articles.filter(a => a.lawId === 'fdma:' + manualId);
+  if (!pages.length || !keywords || !keywords.length) return '';
+  const terms = keywords.map(normalize);
+  const scored = [];
+  for (const a of pages){
+    let s = 0, matched = 0;
+    for (const t of terms){
+      const hits = countOccurrences(a.nBody, t, 3);
+      if (hits){ s += Math.min(t.length, 8) * (1 + hits * 0.5); matched++; }
+      if (a.nCaption.includes(t)) s += t.length;
+    }
+    if (matched) scored.push({ a, s: s * (1 + (matched - 1) * 0.6) });
+  }
+  if (!scored.length) return '';
+  scored.sort((x, y) => y.s - x.s);
+  return '<div class="kv" style="margin-top:8px">' +
+    scored.slice(0, 3).map(x =>
+      '<a href="' + esc(x.a.url) + '" target="_blank" rel="noopener" class="reflink">' +
+      '📘 ' + esc(x.a.lawTitle) + ' ' + esc(x.a.title) + ' ↗</a>').join('') + '</div>';
+}
+
 function renderFdmaStatus(){
   const el = document.getElementById('fdma-status');
   if (!el) return;
@@ -1806,6 +2130,15 @@ function initUI(){
     DB.yoto.items.map((y, i) =>
       '<option value="' + i + '">' + esc(y.label.slice(0, 46)) + (y.tokutei ? ' ★特定' : '') + '</option>').join('');
   sel.addEventListener('change', onYotoChange);
+
+  // 防火管理者タブの用途プルダウン
+  const bkSel = document.getElementById('bk-yoto');
+  bkSel.innerHTML = '<option value="">（用途を選ぶ）</option>' +
+    DB.yoto.items.map((y, i) =>
+      '<option value="' + i + '">' + esc(y.label.slice(0, 46)) + (y.tokutei ? ' ★特定' : '') + '</option>').join('');
+  runBoka();
+  renderFlowChips();
+  if (DB.enf && DB.enf.flows.length) showFlow(DB.enf.flows[0].id);
 
   renderLawChips();
   renderFreshness();

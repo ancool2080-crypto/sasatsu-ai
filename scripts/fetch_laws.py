@@ -35,6 +35,9 @@ TARGET_LAWS = [
     {"law_id": "325CO0000000338", "short": "建基令",   "note": "建築基準法施行令"},
     # 少量危険物・指定可燃物の指摘で必ず参照するため収録する
     {"law_id": "334CO0000000306", "short": "危政令",   "note": "危険物の規制に関する政令"},
+    # 違反処理の事前手続（聴聞・弁明の機会の付与）と代執行で必ず参照する
+    {"law_id": "405AC0000000088", "short": "行手法",   "note": "行政手続法"},
+    {"law_id": "323AC0000000043", "short": "代執行法", "note": "行政代執行法"},
 ]
 
 # 法令XML要素名 → e-Gov 本文ページのアンカー接頭辞
@@ -186,6 +189,29 @@ def parse_items(container, level=1):
     return results
 
 
+def parse_table_struct(container):
+    """TableStruct（条文中の表）を行×セルのテキストにする。
+
+    収容人員の算定方法（規則第1条の3）のように、実務上必要な基準が
+    条文本体ではなく表に書かれていることがあるため必ず拾う。
+    """
+    rows = []
+    for struct in as_list(container.get("TableStruct")):
+        table = struct.get("Table") if isinstance(struct, dict) else None
+        if not isinstance(table, dict):
+            continue
+        for row in as_list(table.get("TableRow")):
+            if not isinstance(row, dict):
+                continue
+            cells = []
+            for column in as_list(row.get("TableColumn")):
+                lines = as_list(column.get("Sentence")) if isinstance(column, dict) else []
+                cells.append("\n".join(sentences_text(x) for x in lines))
+            if any(c.strip() for c in cells):
+                rows.append(cells)
+    return rows
+
+
 def parse_paragraphs(article):
     paragraphs = []
     for node in as_list(article.get("Paragraph")):
@@ -198,6 +224,9 @@ def parse_paragraphs(article):
         items = parse_items(node)
         if items:
             entry["items"] = items
+        tables = parse_table_struct(node)
+        if tables:
+            entry["tables"] = tables
         paragraphs.append(entry)
     return paragraphs
 
@@ -254,24 +283,10 @@ def parse_appdx_tables(body):
     for appdx in as_list(body.get("AppdxTable")):
         if not isinstance(appdx, dict):
             continue
-        rows = []
-        for struct in as_list(appdx.get("TableStruct")):
-            table = struct.get("Table") if isinstance(struct, dict) else None
-            if not isinstance(table, dict):
-                continue
-            for row in as_list(table.get("TableRow")):
-                if not isinstance(row, dict):
-                    continue
-                cells = []
-                for column in as_list(row.get("TableColumn")):
-                    lines = as_list(column.get("Sentence")) if isinstance(column, dict) else []
-                    cells.append("\n".join(sentences_text(x) for x in lines))
-                if any(c.strip() for c in cells):
-                    rows.append(cells)
         tables.append({
             "title": sentences_text(appdx.get("AppdxTableTitle")),
             "related": appdx.get("RelatedArticleNum") or "",
-            "rows": rows,
+            "rows": parse_table_struct(appdx),
         })
     return tables
 

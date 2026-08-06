@@ -4,7 +4,7 @@
    法令JSONは初回アクセス時にキャッシュされ、以後オフラインで閲覧できる。 */
 
 // data/ 配下を更新したらこの値を上げること（上げないと古いJSONが1回表示される）
-const VERSION    = 'v3';
+const VERSION    = 'v4';
 const CACHE_APP  = 'sasatsu-app-' + VERSION;
 const CACHE_FONT = 'sasatsu-font-' + VERSION;
 
@@ -17,7 +17,9 @@ const CORE = [
   'data/yoto.json',
   'data/findings_map.json',
   'data/ordinances.json',
-  'data/fdma.json'
+  'data/fdma.json',
+  'data/boka_kanri.json',
+  'data/enforcement.json'
 ];
 
 self.addEventListener('install', (event) => {
