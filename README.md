@@ -3,7 +3,8 @@
 立入検査で見つけた指摘事項から根拠法令を引くための、個人用の検索・学習ツールです。
 単一HTMLのPWAで、スマートフォンのホーム画面から起動でき、オフラインでも条文を閲覧できます。
 
-公開URL: https://ancool2080-crypto.github.io/sasatsu-ai/
+リポジトリは現在 **private** で、GitHub Pages は未設定です。
+公開すると `https://ancool2080-crypto.github.io/sasatsu-ai/` で使えるようになります（下記「公開する」参照）。
 
 > **このツールは法解釈の最終判断を行うものではありません。**
 > 提示される根拠法令は実務上の一般的な整理です。個々の事案への当てはめと最終的な判断は
@@ -111,6 +112,21 @@ python -m http.server 8823
 ```
 
 `http://127.0.0.1:8823/` を開きます。`file://` では動きません（fetch がブロックされるため）。
+
+## 公開する（スマホから使えるようにする）
+
+スマートフォンのホーム画面から起動するには、GitHub Pages で公開する必要があります。
+無料アカウントの場合、Pages を使うにはリポジトリを public にしてください。
+
+```bash
+gh repo edit --visibility public --accept-visibility-change-consequences
+gh api -X POST repos/ancool2080-crypto/sasatsu-ai/pages -f "source[branch]=main" -f "source[path]=/"
+```
+
+数分後に `https://ancool2080-crypto.github.io/sasatsu-ai/` が開きます。
+スマホのブラウザでアクセスし、共有メニューから「ホーム画面に追加」を選ぶとPWAとして起動します。
+`manifest.json` の `start_url` と `scope` はリポジトリ名 `sasatsu-ai` を前提にしています。
+別名にする場合は両方を書き換えてください。
 
 ---
 
