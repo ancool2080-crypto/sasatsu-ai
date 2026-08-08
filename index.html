@@ -2076,6 +2076,7 @@ function runSetsubi(){
     '／' + (kouzou === 'taika' ? '耐火構造' : kouzou === 'juntaika' ? '準耐火構造' : '耐火構造でない') +
     (nanen ? '・内装難燃' : '') + '</div></div>';
 
+  if (zumenReading) html += renderZumenSetsubi(zumenReading);
   html += renderShokaki(yoto, area, kouzou, nanen, denki, kaki);
   html += renderSetsubiList(yoto, area, floors);
   html += renderShuyouJinin(yoto);
@@ -2146,10 +2147,10 @@ function renderShokaki(yoto, area, kouzou, nanen, denki, kaki){
   return html + '</div>';
 }
 
-function renderSetsubiList(yoto, area, floors){
-  let html = '<div class="card"><h3>主要な消防用設備の当たり</h3>';
-  for (const s of DB.setsubi.setsubi){
-    let verdict = '', cls = 'muted';
+/** 設備ごとの判定を作る。表示と図面との突き合わせで同じ結果を使う。 */
+function computeSetsubiVerdicts(yoto, area, floors){
+  return DB.setsubi.setsubi.map(s => {
+    let verdict = '', cls = 'muted', required = 'unknown';
     if (s.occupant_based){
       verdict = '収容人員で決まります';
     } else if (s.floor_based){
@@ -2162,12 +2163,20 @@ function renderSetsubiList(yoto, area, floors){
         verdict = 'この用途は一覧にありません — 条文で確認';
       } else if (area >= rule.area){
         verdict = '設置義務に当たる可能性が高い（' + rule.desc + '）';
-        cls = 'hit';
+        cls = 'hit'; required = 'yes';
       } else {
         verdict = rule.desc + ' に満たない';
-        cls = 'ok';
+        cls = 'ok'; required = 'no';
       }
     }
+    return { s, verdict, cls, required };
+  });
+}
+
+function renderSetsubiList(yoto, area, floors){
+  let html = '<div class="card"><h3>主要な消防用設備の当たり</h3>';
+  for (const v of computeSetsubiVerdicts(yoto, area, floors)){
+    const s = v.s, verdict = v.verdict, cls = v.cls;
     html += '<div class="setsubi-row ' + cls + '">' +
       '<div class="s-name">' + esc(s.label) + '</div>' +
       '<div class="s-verdict">' + esc(verdict) + '</div>' +
@@ -2246,6 +2255,7 @@ function renderShuyouJinin(yoto){
 
 /* ---------- 図面の読み取り（Claude Vision） ---------- */
 let zumenData = null;
+let zumenReading = null;
 
 function onZumenPicked(ev){
   const file = ev.target.files && ev.target.files[0];
@@ -2269,8 +2279,10 @@ function onZumenPicked(ev){
 
 function clearZumen(){
   zumenData = null;
+  zumenReading = null;
   document.getElementById('zumen-file').value = '';
   document.getElementById('zumen-preview').innerHTML = '';
+  runSetsubi();
 }
 
 /** 画像の送信前に、実物を見せて同意を取る */
@@ -2308,13 +2320,22 @@ async function readZumen(){
   const base64 = zumenData.dataUrl.split(',')[1];
   const mediaType = zumenData.type === 'image/png' ? 'image/png' : 'image/jpeg';
   const prompt =
-    'これは日本の建物の図面です。図面に「書かれている文字」だけを読み取ってください。' +
-    '図形の形状から面積を推定してはいけません。読み取れないものは null にしてください。\n' +
+    'これは日本の建物の消防用設備等に関する図面です。次の2つを読み取ってください。\n' +
+    '(1) 図面に「書かれている文字」（面積表・寸法・凡例の文字）。' +
+    '図形の形状から面積を推定してはいけません。\n' +
+    '(2) 凡例（レジェンド）に載っている記号と、その記号が平面図に描かれているかどうか。\n' +
+    '重要：個数は「数え漏れや重複があり得る参考値」として扱います。' +
+    '自信が持てないときは kosuu_sanko を null にしてください。' +
+    '存在するかどうか（aru）だけは慎重に判断してください。' +
+    '凡例に無い記号を推測で設備名に結びつけないでください。\n' +
     '次のJSONだけを返してください（説明文は不要）:\n' +
     '{"nobe_menseki": 数値またはnull, "kaisuu": 数値またはnull, ' +
     '"kai_menseki": [{"kai": "1階", "menseki": 数値}], ' +
     '"youto": "図面に書かれている用途またはnull", "sunpou": ["読み取れた寸法の文字列"], ' +
-    '"memo": "面積表が見当たらない等の気づき"}\n' +
+    '"hanrei": [{"kigou": "記号の見た目の説明", "imi": "凡例に書かれた意味"}], ' +
+    '"setsubi": [{"shurui": "消防用設備等の名称", "aru": true/false, ' +
+    '"kosuu_sanko": 数値またはnull, "konkyo": "そう判断した理由（凡例にあった等）"}], ' +
+    '"memo": "面積表や凡例が見当たらない等の気づき"}\n' +
     '面積の単位は㎡に揃えてください。';
 
   try {
@@ -2348,10 +2369,123 @@ async function readZumen(){
   }
 }
 
+/* 図面から読み取った設備名を、こちらの設備IDに寄せる */
+function matchZumenSetsubi(shurui){
+  const t = normalize(String(shurui || ''));
+  if (!t) return null;
+  const pools = [];
+  if (DB.setsubi.shokaki.aliases) pools.push({ id: 'shokaki', label: '消火器具', aliases: DB.setsubi.shokaki.aliases });
+  for (const s of DB.setsubi.setsubi) if (s.aliases) pools.push(s);
+  for (const s of DB.setsubi.other_zumen_setsubi || []) pools.push(s);
+
+  let best = null, bestLen = 0;
+  for (const p of pools){
+    for (const a of p.aliases || []){
+      const na = normalize(a);
+      if (na && t.includes(na) && na.length > bestLen){ best = p; bestLen = na.length; }
+    }
+  }
+  return best;
+}
+
+/** 「法令が要求する設備」と「図面に描かれている設備」を突き合わせる */
+function renderZumenSetsubi(reading){
+  const list = Array.isArray(reading.setsubi) ? reading.setsubi : [];
+  const hanrei = Array.isArray(reading.hanrei) ? reading.hanrei : [];
+  if (!list.length && !hanrei.length) return '';
+
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  const area = parseFloat(document.getElementById('s-area').value) || 0;
+  const floors = parseInt(document.getElementById('s-floors').value, 10) || 0;
+
+  // 図面側：設備IDごとに「描かれている」情報をまとめる
+  const drawn = {};
+  for (const item of list){
+    const m = matchZumenSetsubi(item.shurui);
+    const key = m ? m.id : ('other:' + item.shurui);
+    if (!drawn[key] || item.aru) {
+      drawn[key] = { label: m ? m.label : String(item.shurui || ''),
+                     aru: !!item.aru, kosuu: item.kosuu_sanko,
+                     konkyo: item.konkyo || '', matched: !!m };
+    }
+  }
+
+  let html = '<div class="card"><h3>図面との突き合わせ</h3>' +
+    '<div class="disclaimer">' + esc(DB.setsubi.zumen_note) + '</div>';
+
+  if (hanrei.length){
+    html += '<div class="calc"><div class="calc-row"><span>凡例から読み取った記号</span><span>' +
+      hanrei.length + '件</span></div>' +
+      hanrei.slice(0, 20).map(h =>
+        '<div class="calc-row"><span>' + esc(String(h.kigou || '')).slice(0, 28) + '</span><span>' +
+        esc(String(h.imi || '')).slice(0, 34) + '</span></div>').join('') + '</div>';
+  }
+
+  if (!yoto || !area){
+    html += '<div class="note" style="margin-top:8px">用途区分と延べ面積を入れると、' +
+      '法令が要求する設備と突き合わせます。</div>';
+  } else {
+    const verdicts = computeSetsubiVerdicts(yoto, area, floors);
+    // 消火器具も比較対象に加える（設置義務は別ロジックなので簡易に判定）
+    const shokakiGimu = DB.setsubi.shokaki.setti_gimu.find(g => kouMatches(g.kou, yoto));
+    const rows = [];
+    if (shokakiGimu){
+      rows.push({ id: 'shokaki', label: '消火器具',
+                  required: area >= shokakiGimu.area ? 'yes' : 'no',
+                  verdict: shokakiGimu.ref });
+    }
+    for (const v of verdicts){
+      rows.push({ id: v.s.id, label: v.s.label, required: v.required, verdict: v.verdict });
+    }
+
+    const missing = [], ok = [], extra = [];
+    for (const row of rows){
+      const d = drawn[row.id];
+      if (row.required === 'yes'){
+        if (d && d.aru) ok.push({ row, d }); else missing.push({ row, d });
+      } else if (d && d.aru){
+        extra.push({ row, d });
+      }
+    }
+    // 当たり付けの一覧に無い設備（スプリンクラー等）も、図面にあれば拾う
+    const rowIds = new Set(rows.map(r => r.id));
+    for (const [key, d] of Object.entries(drawn)){
+      if (!rowIds.has(key) && d.aru){
+        extra.push({ row: { label: d.label, verdict: '当たり付けの対象外' }, d });
+      }
+    }
+
+    if (missing.length){
+      html += '<div class="hit-note" style="margin-top:10px"><strong>図面に見当たりません（要確認）</strong><br>' +
+        missing.map(x => esc(x.row.label) + '　<span class="muted">' + esc(x.row.verdict) + '</span>').join('<br>') +
+        '</div>' +
+        '<div class="muted" style="margin-top:6px">図面の範囲外（別図・別階）に描かれていることもあります。' +
+        '現地と他の図面で確認してください。</div>';
+    }
+    if (ok.length){
+      html += '<div class="ok-note" style="margin-top:10px"><strong>図面に描かれています</strong><br>' +
+        ok.map(x => esc(x.row.label) +
+          (x.d.kosuu != null ? '　<span class="muted">参考：' + esc(String(x.d.kosuu)) + '（判定には使いません）</span>' : '')
+        ).join('<br>') + '</div>';
+    }
+    if (extra.length){
+      html += '<div class="note" style="margin-top:10px"><strong>図面にあるが、当たり付けでは義務と判定していないもの</strong><br>' +
+        extra.map(x => esc(x.row.label)).join('、') +
+        '<br>任意設置か、階ごと・部分ごとの基準による設置が考えられます。条文で確認してください。</div>';
+    }
+    if (!missing.length && !ok.length && !extra.length){
+      html += '<div class="muted" style="margin-top:8px">突き合わせできる設備が読み取れませんでした。</div>';
+    }
+  }
+  return html + '</div>';
+}
+
 function renderZumenResult(r, keep){
   const box = document.getElementById('zumen-preview');
   const kai = Array.isArray(r.kai_menseki) ? r.kai_menseki.filter(x => x && x.menseki) : [];
   const sum = kai.reduce((n, x) => n + (parseFloat(x.menseki) || 0), 0);
+  zumenReading = r;
 
   let html = keep +
     '<div class="card" style="margin-top:12px"><h3>読み取った内容（必ず確認してください）</h3>' +
@@ -2371,8 +2505,19 @@ function renderZumenResult(r, keep){
     (r.youto ? '<div class="muted" style="margin-top:6px">図面に書かれていた用途：' + esc(String(r.youto)) + '</div>' : '') +
     (r.memo ? '<div class="note" style="margin-top:6px">' + esc(String(r.memo)) + '</div>' : '') +
     (Array.isArray(r.sunpou) && r.sunpou.length
-      ? '<div class="muted" style="margin-top:6px">読み取れた寸法：' + esc(r.sunpou.slice(0, 8).join('、')) + '</div>' : '') +
-    '<div class="row" style="margin-top:12px">' +
+      ? '<div class="muted" style="margin-top:6px">読み取れた寸法：' + esc(r.sunpou.slice(0, 8).join('、')) + '</div>' : '');
+
+  const setsubiRead = Array.isArray(r.setsubi) ? r.setsubi.filter(x => x && x.aru) : [];
+  if (setsubiRead.length){
+    html += '<label class="fld">図面に描かれている設備（読み取り結果）</label>' +
+      '<div class="calc">' + setsubiRead.map(x =>
+        '<div class="calc-row"><span>' + esc(String(x.shurui || '')) + '</span><span>' +
+        (x.kosuu_sanko != null ? '参考 ' + esc(String(x.kosuu_sanko)) : '有') + '</span></div>').join('') +
+      '</div>' +
+      '<div class="muted" style="margin-top:4px">個数は参考値です。設置義務の判定には使いません。</div>';
+  }
+
+  html += '<div class="row" style="margin-top:12px">' +
       '<button class="btn" onclick="applyZumen()">確認した・この値を使う</button>' +
       '<button class="btn sec" onclick="clearZumen()">破棄する</button></div></div>';
   box.innerHTML = html;
