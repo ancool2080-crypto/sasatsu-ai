@@ -1,0 +1,178 @@
+---
+name: sasatsu-ai
+description: 防火対象物査察支援AI（sasatsu-ai）の保守・拡張を行うためのスキル。消防法・施行令・施行規則・建築基準法・危政令・行政手続法などの条文データ、匿名化した火災予防条例、消防庁の標準マニュアル・執務資料・通知を検索できる個人用PWAの構築手順、データ更新パイプライン、守秘義務まわりの安全策、GitHub Pagesへの公開手順をまとめている。査察・立入検査・違反処理・防火管理者・消防用設備・収容人員・能力単位・火災予防条例・指摘事項の根拠法令といった話題が出たとき、または sasatsu-ai / 査察AI / 査察支援ツール の改修・データ更新・条例追加・通知収録・デプロイを頼まれたときは必ずこのスキルを読むこと。新しい自治体の条例を足す、指摘辞書を増やす、法令を再取得する、といった作業もここに手順がある。
+---
+
+# 防火対象物査察支援AI（sasatsu-ai）
+
+消防本部予防課の職員が、立入検査の指摘事項から根拠法令を引くための個人用ツール。
+単一HTMLのPWAで、GitHub Pages に公開してスマホのホーム画面から使う。
+
+- 公開URL: https://ancool2080-crypto.github.io/sasatsu-ai/
+- リポジトリ: https://github.com/ancool2080-crypto/sasatsu-ai （public）
+- ローカル: `C:\Users\ancoo\Desktop\sasatsu-ai`
+
+## このツールが立っている前提
+
+査察の判断そのものはツールがやらない。**根拠にたどり着く時間を短くするのが目的**で、
+条項の確定と法解釈は利用者本人が原典で行う。だからどの画面でも出典と取得日を必ず出し、
+「当たり付け」と「確定」を言葉の上で区別している。この線を崩す変更はしないこと。
+
+もうひとつの前提は守秘義務。立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはならない
+（消防法第4条第4項）。査察メモは端末内に留め、外部送信する場面では必ず内容を見せて同意を取る。
+
+## 構成
+
+```
+index.html            単一HTMLのPWA本体（8タブ・約140KB）
+sw.js                 Service Worker（データ更新時は VERSION を上げる）
+manifest.json / offline.html / icons/
+data/
+  laws/*.json         e-Gov法令API v2 から取得した条文（8法令・1,332条）
+  laws_index.json     法令の一覧と施行日・最終改正日
+  yoto.json           令別表第一の用途区分35件（特定防火対象物の別つき）
+  findings_map.json   指摘事項→根拠法令の辞書（35パターン）※手で育てる
+  ordinances.json     匿名化済みの火災予防条例・同施行規則（原文は非同梱）
+  fdma.json           消防庁の標準マニュアル・執務資料・ガイドライン本文＋通知書誌
+  boka_kanri.json     防火管理者の選任義務・甲乙の別の判定ルール
+  enforcement.json    立入検査・違反処理の進め方（マニュアルのページは実行時に検索）
+  setsubi.json        消火器の能力単位計算と主要設備の設置義務ルール
+scripts/              データ生成・検証スクリプト（下記）
+```
+
+タブは 指摘→根拠 / 条文検索 / 防火管理者 / 執行手続き / 設備判定 / ノウハウ / 査察メモ / 設定 の8つ。
+
+## データの更新手順
+
+どれも `python scripts/xxx.py` で単体実行できる。実行後は必ず検証スクリプトを通す。
+
+| やりたいこと | コマンド |
+|---|---|
+| 法令を再取得 | `python scripts/fetch_laws.py` → `python scripts/build_yoto.py` |
+| 消防庁の通知・マニュアルを更新 | `python scripts/fetch_fdma.py`（`--index-only` で書誌のみ） |
+| 例規集のHTMLをテキスト化 | `python scripts/ordinance_from_html.py 保存.html -o data/ordinances_src/xxx.txt` |
+| 条例を匿名化して取り込む | `python scripts/anonymize_ordinance.py --names "〇〇市,〇〇県" --type "市"` |
+| データの整合性を確認 | `python scripts/validate_data.py` |
+| 公開前の点検 | `python scripts/check_publish_safety.py --names "〇〇市,〇〇県"` |
+
+**データを更新したら `sw.js` の `VERSION` を上げる。** 上げないとキャッシュが効いて
+利用者に古いJSONが一度表示される。これは実際に踏んだ。
+
+## 絶対に崩してはいけない安全策
+
+### 1. 条例の匿名化
+
+火災予防条例は自治体ごとに違い、どの自治体のものか分かると所属が特定される。
+`anonymize_ordinance.py` が自治体名・消防本部名・一部事務組合名・様式番号をマスクし、
+**原文は `.gitignore` でリポジトリに入れない**。マスク済みのJSONだけを同梱する。
+
+過剰マスクにも注意。一度、国の基準である「平成14年消防庁告示第1号」まで伏せてしまい、
+離隔距離の根拠が読めなくなった。国の機関名が直前にある告示は残す実装が入っている。
+
+**リポジトリのどこにも自治体名を書かない。** README に「千葉県旭市の条例を収録」と
+書いてしまったことがあり、これだとマスクした意味が消える。`check_publish_safety.py` が
+これを検出する。公開前とデータ追記後に必ず走らせること。
+
+### 2. 外部送信の前に見せる
+
+AI解説と図面読み取りは Anthropic に送信する。送信前に**全文または画像そのものを表示して
+同意を取る**。入力文に自治体名・法人名・建物名・電話番号・郵便番号らしき語があれば警告する。
+仮名（`A商店ビル` `甲ビル`）は推奨している書き方なので警告しない。
+`市町村長` `市街地` `区域` のような法令用語も警告しない。ここを雑にすると表示が無視される。
+
+査察メモは送信対象に含めない。ノウハウノートも同じ。
+
+### 3. 数えたものを判定に使わない
+
+図面から読み取れるのは「描かれているかどうか」まで。個数は参考値として表示するだけで、
+設置義務の判定には使わない。撮影図面では小さな記号を数え漏らしたり重複して数えたりするため、
+個数を判定に使うと誤指摘か見逃しになる。同じ理由で、図面の輪郭をトレースして面積を測る
+自動計測も実装していない。面積は面積表・寸法の「文字」を読むか、手入力する。
+
+## 実装で踏んだ落とし穴
+
+同じところで詰まらないように残しておく。
+
+- **条文中の表**：`TableStruct` は `Paragraph` の中に入っている。ここを取りこぼすと
+  収容人員の算定方法（規則第1条の3）も消火器の基準面積（規則第6条）もデータに入らない。
+- **ふりがな**：`<Ruby>侶<Rt>りよ</Rt></Ruby>` が本文に混ざる。`ArticleCaption` や
+  `ItemTitle` は `sentences_text` を通らないので、そちらにも `strip_markup` を当てる。
+- **e-Gov のアンカー**：`#Mp-Ch_2-Se_3-Ss_1-At_8` の形。章・節にも枝番がある
+  （`第七章の二の二` → `Ch_7_2_2`）。「第十七条及び第十八条 削除」のような複数条を
+  まとめた見出しには実機のアンカーが無いので、単一の条を指す見出しだけをアンカー化する。
+- **画像PDF**：埋め込みフォントに Unicode 対応が無いと `(cid:1608)` の羅列になる。
+  消防予第573号で125ページが該当し、87万文字のごみが索引に入った。判別して落とす。
+- **例規集のHTML**：表のセル内に `<p>` が入っており、先に潰さないと
+  「標識名／巾／長さ／地／文字」が1セル1行に散る。章立てが無い規則もある。
+- **関数名の衝突**：`yotoKey` を別モジュールで二重定義して枝番判定が壊れた。
+  `index.html` は単一ファイルなので、追加時は `grep -c "function 名前"` で確認する。
+
+## 品質チェック
+
+`index.html` を触ったら毎回これを通す。単一ファイルなので静的検査が効く。
+
+```bash
+PYTHONIOENCODING=utf-8 python -c "
+import re
+from html.parser import HTMLParser
+src=open('index.html',encoding='utf-8').read()
+class V(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.errors=[]; self.stack=[]
+        self.void={'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
+    def handle_starttag(self,t,a):
+        if t not in self.void: self.stack.append(t)
+    def handle_endtag(self,t):
+        if t in self.void: return
+        if self.stack and self.stack[-1]==t: self.stack.pop()
+        else: self.errors.append('</%s>'%t)
+v=V(); v.feed(src); print('HTML:','OK' if not v.errors and not v.stack else 'NG')
+funcs=set(re.findall(r'function\s+([A-Za-z0-9_]+)\s*\(',src))
+print('関数の重複:', sorted({f for f in funcs if len(re.findall(r'function\s+'+f+r'\s*\(',src))>1}) or 'なし')
+ids=set(re.findall(r'id=\"([A-Za-z0-9_-]+)\"',src)); refs=set(re.findall(r'getElementById\(.([A-Za-z0-9_-]+).\)',src))
+print('getElementById未定義:', sorted(refs-ids) or 'なし')
+declared=set(re.findall(r'(--[a-z-]+)\s*:',src.split('</style>')[0]))
+print('未定義CSS変数:', sorted(set(re.findall(r'var\((--[a-z-]+)\)',src))-declared) or 'なし')
+mods=set(re.findall(r'id=\"mod-([a-z]+)\"',src)); tabs=set(re.findall(r'data-mod=\"([a-z]+)\"',src))
+print('タブ/モジュール:', 'OK' if mods==tabs else '不一致 '+str(mods^tabs))
+"
+```
+
+実機確認は `python -m http.server 8823 --bind 127.0.0.1` を上げてブラウザで見る。
+Service Worker のキャッシュが残るので、確認前に登録解除と `caches.delete()` をしてから再読込する。
+
+## 公開
+
+```bash
+python scripts/validate_data.py
+python scripts/check_publish_safety.py --names "〇〇市,〇〇県"
+# sw.js の VERSION を上げる
+git add -A && git commit && git push origin main
+```
+
+GitHub Pages が自動でビルドする。`gh api repos/ancool2080-crypto/sasatsu-ai/pages/builds/latest`
+で状態を見られるが、**コミットハッシュの反映が遅れることがある**ので、
+実際のファイルを `curl` で取って中身を確認するほうが確実。
+
+## 拡張するとき
+
+- **指摘辞書を増やす**：`data/findings_map.json` に追記して `validate_data.py`。
+  参照先の条が実在するか、条見出しが指摘内容と噛み合っているかを目視で確認する。
+  ここに所属固有の運用を書くと公開されるので注意。
+- **他の自治体の例規を足す**：例規集のページを保存 → `ordinance_from_html.py` →
+  `anonymize_ordinance.py`。要確認候補がゼロになるまで `--names` に足して繰り返す。
+- **法令を足す**：`fetch_laws.py` の `TARGET_LAWS` に law_id と略称を足す。
+  law_id は `/laws?law_title=...` で引ける。
+- **設備の判定を足す**：`data/setsubi.json` の `setsubi` に条文の主要要件だけを書く。
+  ただし書・緩和・特例は入れず、判定できないものは「〜では決まりません」と正直に出す。
+
+## 参照している一次資料
+
+- e-Gov法令検索 法令API v2 https://laws.e-gov.go.jp/api/2/swagger-ui
+  （政府標準利用規約第2.0版／CC BY 4.0互換。出典と加工の明示が要る）
+- 消防庁 通知・通達 https://www.fdma.go.jp/laws/tutatsu/
+  （公共データ利用規約PDL1.0。通知・通達は著作権法第13条第2号により著作権の目的とならない）
+- 火災予防条例は e-Gov に無いので、自治体の例規集から手動で取得する
+
+**市販の実務書（査察マスター・建築消防advice 等）の内容は収録しない。** 著作物であり、
+リポジトリは public。書籍で調べたことは、利用者が自分の言葉でノウハウノートに残す設計にしている。
