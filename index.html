@@ -143,6 +143,29 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.fdma{background:var(--sage)}
 .badge.note{background:var(--ochre)}
 
+/* ---------- 設備判定 ---------- */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:420px){ .row2{grid-template-columns:1fr} }
+.chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--ink-soft)}
+.chk input{width:auto;margin:0}
+.calc{background:var(--warm-white);border:1px solid var(--mist);border-radius:var(--radius-sm);padding:10px 12px;margin-top:8px}
+.calc-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0;line-height:1.7}
+.calc-row span:first-child{color:var(--bark-light);flex-shrink:0}
+.calc-row span:last-child{text-align:right}
+.calc-row.total{border-top:1px solid var(--mist);margin-top:5px;padding-top:7px;font-weight:700;color:var(--sage-dark)}
+.calc-row.muted span{color:var(--bark-light)}
+.hit-note{background:rgba(192,113,79,.12);border-left:3px solid var(--terra);border-radius:var(--radius-sm);padding:8px 11px;font-size:13px;color:var(--bark)}
+.ok-note{background:rgba(92,122,95,.1);border-left:3px solid var(--sage);border-radius:var(--radius-sm);padding:8px 11px;font-size:13px;color:var(--sage-dark)}
+.setsubi-row{border-top:1px solid var(--mist);padding:11px 0}
+.setsubi-row:first-of-type{border-top:none}
+.setsubi-row .s-name{font-weight:700;font-size:13.5px;color:var(--ink)}
+.setsubi-row .s-verdict{font-size:12.5px;margin-top:3px;color:var(--bark-light)}
+.setsubi-row.hit .s-verdict{color:var(--terra);font-weight:700}
+.setsubi-row.ok .s-verdict{color:var(--sage-dark)}
+.setsubi-row .s-note{font-size:11.5px;color:var(--bark-light);margin-top:4px;line-height:1.8}
+.setsubi-row .s-refs{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px}
+.zumen-img{max-width:100%;border-radius:var(--radius-sm);border:1px solid var(--mist);margin-top:10px;display:block}
+
 /* ---------- 防火管理者・執行手続き ---------- */
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:420px){ .row2{grid-template-columns:1fr} }
@@ -342,6 +365,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
     <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><span class="ico">📖</span>条文検索</button>
     <button class="nav-tab" data-mod="boka" onclick="showModule('boka')"><span class="ico">👤</span>防火管理者</button>
     <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><span class="ico">⚖️</span>執行手続き</button>
+    <button class="nav-tab" data-mod="setsubi" onclick="showModule('setsubi')"><span class="ico">🧯</span>設備判定</button>
     <button class="nav-tab" data-mod="knowhow" onclick="showModule('knowhow')"><span class="ico">💡</span>ノウハウ</button>
     <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><span class="ico">📝</span>査察メモ</button>
     <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><span class="ico">⚙️</span>設定</button>
@@ -418,6 +442,57 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
         <div id="bk-santei"></div>
       </div>
       <div id="boka-result"></div>
+    </section>
+
+    <!-- ============ 設備判定 ============ -->
+    <section id="mod-setsubi" class="module">
+      <div class="card">
+        <h3>図面から面積を読み取る（任意）</h3>
+        <div class="disclaimer">
+          <strong>図面は事業所を特定できる情報の塊です。</strong>社名・住所・設計者名が入っていることが多く、
+          送信すると Anthropic に届きます。送信前に画像と警告を表示しますので、必ず確認してください。
+          立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはなりません（消防法第4条第4項）。<br>
+          読み取れるのは<strong>図面に書かれている面積表・寸法の文字</strong>です。
+          図面の輪郭から面積を測るものではありません。読み取った数値は必ずご自身で確認してください。
+        </div>
+        <input type="file" id="zumen-file" accept="image/*" onchange="onZumenPicked(event)">
+        <div id="zumen-preview"></div>
+      </div>
+
+      <div class="card">
+        <h3>対象物の条件</h3>
+        <label class="fld">用途区分（令別表第一）</label>
+        <select id="s-yoto" onchange="runSetsubi()"></select>
+        <div class="row2">
+          <div>
+            <label class="fld">延べ面積（㎡）</label>
+            <input type="number" id="s-area" inputmode="decimal" placeholder="例：850" oninput="runSetsubi()">
+          </div>
+          <div>
+            <label class="fld">地階を除く階数</label>
+            <input type="number" id="s-floors" inputmode="numeric" placeholder="例：3" oninput="runSetsubi()">
+          </div>
+        </div>
+        <label class="fld">主要構造部</label>
+        <select id="s-kouzou" onchange="runSetsubi()">
+          <option value="other">耐火構造でない</option>
+          <option value="taika">特定主要構造部が耐火構造</option>
+          <option value="juntaika">準耐火構造</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="s-nanen" onchange="runSetsubi()">
+          壁及び天井の室内に面する部分の仕上げが難燃材料</label>
+        <div class="row2">
+          <div>
+            <label class="fld">電気設備がある場所の床面積（㎡）</label>
+            <input type="number" id="s-denki" inputmode="decimal" placeholder="任意" oninput="runSetsubi()">
+          </div>
+          <div>
+            <label class="fld">多量の火気を使用する場所の床面積（㎡）</label>
+            <input type="number" id="s-kaki" inputmode="decimal" placeholder="任意" oninput="runSetsubi()">
+          </div>
+        </div>
+      </div>
+      <div id="setsubi-result"></div>
     </section>
 
     <!-- ============ ノウハウノート ============ -->
@@ -605,6 +680,7 @@ async function boot(){
 
     setProgress(88, '消防庁の通知・マニュアルを読み込み中…');
     DB.fdma = await getJSON('data/fdma.json').catch(() => null);
+    DB.setsubi = await getJSON('data/setsubi.json').catch(() => null);
     DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
     DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
@@ -1947,6 +2023,371 @@ function renderFreshness(){
 }
 
 /* =====================================================================
+   設備判定
+   延べ面積・用途・構造から、消火器具の必要能力単位と主要な消防用設備の
+   設置義務に当たりを付ける。条文の主要な要件だけを見ており、
+   ただし書・緩和・特例は入っていないため、最後は必ず条文にあたる前提。
+   ===================================================================== */
+
+/** ルールの kou 一覧に該当するか（「（一）項」と書かれていれば枝番すべてを含む）
+    ※ yotoKey は防火管理者モジュールと共用（第2引数で枝番の有無を切り替える） */
+function kouMatches(list, item){
+  const full = yotoKey(item, true);
+  const plain = yotoKey(item, false);
+  return list.some(k => k === full || k === plain);
+}
+
+function initSetsubi(){
+  const sel = document.getElementById('s-yoto');
+  if (!sel || !DB.yoto) return;
+  sel.innerHTML = '<option value="">用途を選んでください</option>' +
+    DB.yoto.items.map((it, i) =>
+      '<option value="' + i + '">' + esc(it.label.slice(0, 40)) + '</option>').join('');
+}
+
+function runSetsubi(){
+  const box = document.getElementById('setsubi-result');
+  if (!box || !DB.setsubi) return;
+
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  const area = parseFloat(document.getElementById('s-area').value) || 0;
+
+  if (!yoto || !area){
+    box.innerHTML = '<div class="empty">用途区分と延べ面積を入れると、' +
+      '消火器具の必要能力単位と主要な消防用設備の当たりを表示します。</div>';
+    return;
+  }
+
+  const kouzou = document.getElementById('s-kouzou').value;
+  const nanen = document.getElementById('s-nanen').checked;
+  const floors = parseInt(document.getElementById('s-floors').value, 10) || 0;
+  const denki = parseFloat(document.getElementById('s-denki').value) || 0;
+  const kaki = parseFloat(document.getElementById('s-kaki').value) || 0;
+
+  let html = '<div class="disclaimer no-print"><strong>これは当たり付けです。</strong>' +
+    'ただし書・緩和・特例・階ごとの基準は入っていません。設置義務の確定は必ず条文本文で判断してください。</div>';
+
+  html += '<div class="card"><h3>前提</h3><div>' +
+    (yoto.tokutei ? '<span class="badge tokutei">特定防火対象物</span>' : '') +
+    esc(yoto.label.slice(0, 48)) + '</div>' +
+    '<div class="muted" style="margin-top:5px">延べ面積 ' + area.toLocaleString() + '㎡' +
+    (floors ? '／地階を除く階数 ' + floors : '') +
+    '／' + (kouzou === 'taika' ? '耐火構造' : kouzou === 'juntaika' ? '準耐火構造' : '耐火構造でない') +
+    (nanen ? '・内装難燃' : '') + '</div></div>';
+
+  html += renderShokaki(yoto, area, kouzou, nanen, denki, kaki);
+  html += renderSetsubiList(yoto, area, floors);
+  html += renderShuyouJinin(yoto);
+  return void (box.innerHTML = html);
+}
+
+function renderShokaki(yoto, area, kouzou, nanen, denki, kaki){
+  const S = DB.setsubi.shokaki;
+
+  // 設置義務
+  let gimu = null;
+  for (const g of S.setti_gimu){
+    if (kouMatches(g.kou, yoto)){ gimu = g; break; }
+  }
+
+  let html = '<div class="card"><h3>🧯 消火器具</h3>';
+  if (!gimu){
+    html += '<div class="muted">この用途は令第10条第1項第1号〜第3号の一覧に見当たりません。' +
+      '少量危険物・指定可燃物の有無（第4号）、地階・無窓階・3階以上の階（第5号）で判断してください。</div>';
+  } else if (area < gimu.area){
+    html += '<div class="ok-note">延べ面積 ' + area.toLocaleString() + '㎡ は ' +
+      gimu.area.toLocaleString() + '㎡ 未満のため、' + esc(gimu.ref) +
+      'による設置義務には当たりません。</div>' +
+      '<div class="muted" style="margin-top:6px">ただし、地階・無窓階・3階以上の階で床面積50㎡以上の部分' +
+      '（令第10条第1項第5号）や、少量危険物・指定可燃物がある場合（同項第4号）は別途必要です。</div>';
+  } else {
+    html += '<div class="hit-note"><strong>設置義務あり</strong>　' + esc(gimu.ref) + '（' + esc(gimu.desc) + '）</div>';
+
+    // 能力単位
+    let base = null;
+    for (const k of S.kijun_menseki){
+      if (kouMatches(k.kou, yoto)){ base = k; break; }
+    }
+    if (!base){
+      html += '<div class="muted" style="margin-top:8px">基準面積の区分が特定できませんでした。規則第6条第1項の表で確認してください。</div>';
+    } else {
+      const doubled = (kouzou === 'taika' && nanen);
+      const eff = doubled ? base.m2 * 2 : base.m2;
+      const units = Math.ceil(area / eff);
+      html += '<div class="calc">' +
+        '<div class="calc-row"><span>基準面積</span><span>' + base.m2 + '㎡（' + esc(base.ref) + '）</span></div>' +
+        (doubled
+          ? '<div class="calc-row"><span>2倍読み</span><span>' + base.m2 + '㎡ × 2 = ' + eff + '㎡（規則第6条第2項）</span></div>'
+          : '<div class="calc-row muted"><span>2倍読み</span><span>該当しない（耐火構造かつ内装難燃のときのみ）</span></div>') +
+        '<div class="calc-row"><span>計算</span><span>' + area.toLocaleString() + '㎡ ÷ ' + eff + '㎡ = ' +
+          (area / eff).toFixed(2) + '</span></div>' +
+        '<div class="calc-row total"><span>必要な能力単位</span><span>' + units + ' 以上</span></div>' +
+        '</div>';
+
+      const adds = [];
+      if (denki) adds.push('電気設備：' + denki.toLocaleString() + '㎡ ÷ 100㎡ = <strong>' +
+        Math.ceil(denki / 100) + '個</strong>の消火器を追加（規則第6条第4項）');
+      if (kaki) adds.push('多量の火気を使用する場所：' + kaki.toLocaleString() + '㎡ ÷ 25㎡ = <strong>' +
+        Math.ceil(kaki / 25) + '</strong>の能力単位を追加（規則第6条第5項）');
+      if (adds.length){
+        html += '<div class="note" style="margin-top:8px">' + adds.join('<br>') + '</div>';
+      }
+    }
+  }
+
+  html += '<div class="note" style="margin-top:10px">' +
+    S.extras.map(e => '<strong>' + esc(e.label) + '</strong>（' + esc(e.ref) + '）<br>' + esc(e.desc)).join('<br><br>') +
+    '</div>';
+  html += S.refs.map(r => {
+    const a = findArticle(r.law_id, r.article);
+    return a ? renderArticle(a, r.point) : '';
+  }).join('');
+  return html + '</div>';
+}
+
+function renderSetsubiList(yoto, area, floors){
+  let html = '<div class="card"><h3>主要な消防用設備の当たり</h3>';
+  for (const s of DB.setsubi.setsubi){
+    let verdict = '', cls = 'muted';
+    if (s.occupant_based){
+      verdict = '収容人員で決まります';
+    } else if (s.floor_based){
+      verdict = floors ? ('階数 ' + floors + ' — 条文の階数要件を確認') : '階数の入力が必要';
+    } else if (!s.rules.length){
+      verdict = '面積だけでは決まりません';
+    } else {
+      const rule = s.rules.find(r => kouMatches(r.kou, yoto));
+      if (!rule){
+        verdict = 'この用途は一覧にありません — 条文で確認';
+      } else if (area >= rule.area){
+        verdict = '設置義務に当たる可能性が高い（' + rule.desc + '）';
+        cls = 'hit';
+      } else {
+        verdict = rule.desc + ' に満たない';
+        cls = 'ok';
+      }
+    }
+    html += '<div class="setsubi-row ' + cls + '">' +
+      '<div class="s-name">' + esc(s.label) + '</div>' +
+      '<div class="s-verdict">' + esc(verdict) + '</div>' +
+      '<div class="s-note">' + esc(s.note) + '</div>' +
+      '<div class="s-refs">' + s.refs.map(r =>
+        '<button class="btn sec sm" onclick="jumpToArticle(\'' + r.law_id + '\',\'' + r.article + '\')">' +
+        esc(shortOf(r.law_id)) + esc(r.article) + '</button>').join('') + '</div>' +
+      '</div>';
+  }
+  return html + '</div>';
+}
+
+function shortOf(lawId){
+  const l = (DB.index.laws || []).find(x => x.law_id === lawId);
+  return l ? l.short : '';
+}
+function jumpToArticle(lawId, article){
+  showModuleByName('jobun');
+  document.getElementById('q-jobun').value = shortOf(lawId) + article;
+  runJobun();
+}
+
+/** 規則第1条の3の表から、その用途の収容人員の算定方法を取り出す */
+function renderShuyouJinin(yoto){
+  const art = findArticle('336M50000008006', '第一条の三');
+  const rows = art && art.paras && art.paras[0] && art.paras[0].tables;
+  if (!rows) return '';
+
+  // 表は結合セルのため、項を示す行と、そのサブ区分の行に分かれている。
+  // 項の見出し行が現れたら「いまどの項を読んでいるか」を切り替え、
+  // 目当ての項に属する行だけを集める。
+  const kouNum = yoto.kou.replace(/[（）]/g, '');
+  const target = '（' + kouNum + '）項';
+  let current = null;
+  let matched = [];
+  for (const row of rows){
+    const head = row[0] || '';
+    if (head.startsWith('令別表第一') || head.startsWith('令第')) current = head;
+    if (current && current.includes(target)) matched.push(row);
+  }
+
+  // 「イに掲げるもの」「ロ及びハに掲げるもの」のように枝番で分かれている項は、
+  // 選ばれた枝番の行だけに絞る（（六）項でイ〜ニが全部出るのを防ぐ）
+  if (yoto.branch && matched.length > 1){
+    const branchRows = matched.filter(row => {
+      const sub = row.length >= 3 ? row[1] : row[0];
+      if (!/に掲げるもの/.test(sub)) return true;     // 「遊技場」「その他のもの」等は残す
+      return sub.includes(yoto.branch);
+    });
+    if (branchRows.length) matched = branchRows;
+  }
+
+  let html = '<div class="card"><h3>収容人員の算定方法</h3>';
+  if (!matched.length){
+    // 「（十二）項から（十四）項まで」のような範囲指定の行は拾えないため、その旨を出す
+    const a0 = findArticle('336M50000008006', '第一条の三');
+    return html +
+      '<div class="muted">' + esc(target) + ' は、表の範囲指定の行（「◯項から◯項まで」）に' +
+      '含まれている可能性があります。下の条文で表を直接ご確認ください。</div>' +
+      (a0 ? renderArticle(a0, '収容人員の算定方法') : '') + '</div>';
+  }
+  html += '<div class="muted">' + esc(yoto.label.slice(0, 40)) + ' に適用される算定方法です（規則第1条の3第1項の表）。</div>';
+  for (const row of matched){
+    const method = row[row.length - 1];
+    const sub = row.length >= 3 ? row[1] : '';
+    html += '<div class="calc" style="margin-top:8px">' +
+      (sub ? '<div class="calc-row"><span>区分</span><span>' + esc(sub) + '</span></div>' : '') +
+      '<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.9">' + esc(method) + '</div></div>';
+  }
+  html += '<div class="note" style="margin-top:8px">従業者数や客席数は図面からは分かりません。' +
+    '現地で確認した数を使ってください。（十六）項・（十六の二）項は用途ごとに算定して合算します（同条第2項）。</div>';
+  const a = findArticle('336M50000008006', '第一条の三');
+  if (a) html += renderArticle(a, '収容人員の算定方法');
+  return html + '</div>';
+}
+
+/* ---------- 図面の読み取り（Claude Vision） ---------- */
+let zumenData = null;
+
+function onZumenPicked(ev){
+  const file = ev.target.files && ev.target.files[0];
+  const box = document.getElementById('zumen-preview');
+  if (!file){ zumenData = null; box.innerHTML = ''; return; }
+  if (file.size > 5 * 1024 * 1024){
+    box.innerHTML = '<div class="disclaimer">画像が大きすぎます（5MBまで）。撮り直すか縮小してください。</div>';
+    zumenData = null;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    zumenData = { dataUrl: reader.result, type: file.type, name: file.name };
+    box.innerHTML = '<img src="' + reader.result + '" class="zumen-img" alt="選んだ図面">' +
+      '<div class="row" style="margin-top:10px">' +
+      '<button class="btn" onclick="readZumen()">この図面から面積を読み取る</button>' +
+      '<button class="btn sec" onclick="clearZumen()">取り消す</button></div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearZumen(){
+  zumenData = null;
+  document.getElementById('zumen-file').value = '';
+  document.getElementById('zumen-preview').innerHTML = '';
+}
+
+/** 画像の送信前に、実物を見せて同意を取る */
+function confirmSendImage(dataUrl){
+  return new Promise((resolve) => {
+    const html = '<button class="close" onclick="closeModal();__sendResolve(false)">✕</button>' +
+      '<h3>この画像を送信します</h3>' +
+      '<div class="disclaimer"><strong>図面には事業所名・住所・設計者名が写り込んでいることがあります。</strong><br>' +
+      '送信先は Anthropic（Claude API）です。立入検査で知り得た関係者の秘密は、' +
+      'みだりに他に漏らしてはなりません（消防法第4条第4項）。<br>' +
+      '固有名詞が写っている場合は、閉じてトリミングしてから読み込ませてください。</div>' +
+      '<img src="' + dataUrl + '" class="zumen-img">' +
+      '<div class="row" style="margin-top:14px">' +
+        '<button class="btn warn" onclick="closeModal();__sendResolve(true)">確認した・送信する</button>' +
+        '<button class="btn sec" onclick="closeModal();__sendResolve(false)">やめる</button>' +
+      '</div>';
+    window.__sendResolve = (ok) => { window.__sendResolve = () => {}; resolve(ok); };
+    openModal(html);
+  });
+}
+
+async function readZumen(){
+  if (!zumenData) return;
+  if (!getApiKey()){
+    alert('図面の読み取りには Claude APIキーが必要です。設定タブで登録してください。\n' +
+          'キーが無くても、面積を手で入力すれば計算は使えます。');
+    return;
+  }
+  if (!await confirmSendImage(zumenData.dataUrl)) return;
+
+  const box = document.getElementById('zumen-preview');
+  const keep = box.innerHTML;
+  box.innerHTML = '<div class="ai"><span class="lbl">読み取り中</span>図面の文字を読んでいます…</div>';
+
+  const base64 = zumenData.dataUrl.split(',')[1];
+  const mediaType = zumenData.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const prompt =
+    'これは日本の建物の図面です。図面に「書かれている文字」だけを読み取ってください。' +
+    '図形の形状から面積を推定してはいけません。読み取れないものは null にしてください。\n' +
+    '次のJSONだけを返してください（説明文は不要）:\n' +
+    '{"nobe_menseki": 数値またはnull, "kaisuu": 数値またはnull, ' +
+    '"kai_menseki": [{"kai": "1階", "menseki": 数値}], ' +
+    '"youto": "図面に書かれている用途またはnull", "sunpou": ["読み取れた寸法の文字列"], ' +
+    '"memo": "面積表が見当たらない等の気づき"}\n' +
+    '面積の単位は㎡に揃えてください。';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': getApiKey(),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: prompt }
+        ]}]
+      })
+    });
+    if (!res.ok) throw new Error('APIエラー ' + res.status);
+    const data = await res.json();
+    const text = (data.content || []).map(c => c.text || '').join('');
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('読み取り結果を解釈できませんでした');
+    renderZumenResult(JSON.parse(m[0]), keep);
+  } catch (e){
+    box.innerHTML = keep +
+      '<div class="disclaimer">読み取りに失敗しました：' + esc(e.message) +
+      '<br>面積を手で入力すれば計算は使えます。</div>';
+  }
+}
+
+function renderZumenResult(r, keep){
+  const box = document.getElementById('zumen-preview');
+  const kai = Array.isArray(r.kai_menseki) ? r.kai_menseki.filter(x => x && x.menseki) : [];
+  const sum = kai.reduce((n, x) => n + (parseFloat(x.menseki) || 0), 0);
+
+  let html = keep +
+    '<div class="card" style="margin-top:12px"><h3>読み取った内容（必ず確認してください）</h3>' +
+    '<div class="disclaimer">これは図面に書かれていた文字の読み取り結果です。' +
+    '<strong>誤読があり得ます。</strong>面積が違えば能力単位も設備判定も変わるので、必ず図面と突き合わせてください。</div>';
+
+  if (kai.length){
+    html += '<div class="calc">' + kai.map(x =>
+      '<div class="calc-row"><span>' + esc(String(x.kai || '')) + '</span><span>' +
+      esc(String(x.menseki)) + '㎡</span></div>').join('') +
+      '<div class="calc-row total"><span>合計</span><span>' + sum.toLocaleString() + '㎡</span></div></div>';
+  }
+  html += '<label class="fld">延べ面積（㎡）</label>' +
+    '<input type="number" id="z-area" value="' + esc(String(r.nobe_menseki || (sum || ''))) + '">' +
+    '<label class="fld">地階を除く階数</label>' +
+    '<input type="number" id="z-floors" value="' + esc(String(r.kaisuu || '')) + '">' +
+    (r.youto ? '<div class="muted" style="margin-top:6px">図面に書かれていた用途：' + esc(String(r.youto)) + '</div>' : '') +
+    (r.memo ? '<div class="note" style="margin-top:6px">' + esc(String(r.memo)) + '</div>' : '') +
+    (Array.isArray(r.sunpou) && r.sunpou.length
+      ? '<div class="muted" style="margin-top:6px">読み取れた寸法：' + esc(r.sunpou.slice(0, 8).join('、')) + '</div>' : '') +
+    '<div class="row" style="margin-top:12px">' +
+      '<button class="btn" onclick="applyZumen()">確認した・この値を使う</button>' +
+      '<button class="btn sec" onclick="clearZumen()">破棄する</button></div></div>';
+  box.innerHTML = html;
+}
+
+function applyZumen(){
+  const a = document.getElementById('z-area').value;
+  const f = document.getElementById('z-floors').value;
+  if (a) document.getElementById('s-area').value = a;
+  if (f) document.getElementById('s-floors').value = f;
+  runSetsubi();
+  document.getElementById('setsubi-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* =====================================================================
    ノウハウノート
    市販の実務書で調べたことを自分の言葉で残す場所。端末内にのみ保存し、
    検索と「指摘→根拠」の結果にも自分のノートが出るようにする。
@@ -2397,6 +2838,8 @@ function initUI(){
     DB.yoto.items.map((y, i) =>
       '<option value="' + i + '">' + esc(y.label.slice(0, 46)) + (y.tokutei ? ' ★特定' : '') + '</option>').join('');
   runBoka();
+  initSetsubi();
+  runSetsubi();
   refreshKnowhowIndex();
   renderKnowhow();
   renderFlowChips();

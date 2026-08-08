@@ -150,12 +150,22 @@ def as_list(value):
     return value if isinstance(value, list) else [value]
 
 
+# ふりがなは <Ruby>侶<Rt>りよ</Rt></Ruby> の形で本文に混ざるので、本字だけ残す
+_RUBY_RT_RE = re.compile(r"<Rt>.*?</Rt>", re.S)
+_RUBY_TAG_RE = re.compile(r"</?Ruby>")
+
+
+def strip_markup(text):
+    text = _RUBY_RT_RE.sub("", text)
+    return _RUBY_TAG_RE.sub("", text)
+
+
 def sentences_text(node):
     """Sentence 配列を1つの文字列にまとめる。"""
     if node is None:
         return ""
     if isinstance(node, str):
-        return node
+        return strip_markup(node)
     if isinstance(node, list):
         return "".join(sentences_text(x) for x in node)
     if isinstance(node, dict):
@@ -179,7 +189,7 @@ def parse_items(container, level=1):
         if not isinstance(node, dict):
             continue
         entry = {
-            "title": node.get(title_key) or "",
+            "title": strip_markup(node.get(title_key) or ""),
             "text": sentences_text(node.get(sent_key)),
         }
         children = parse_items(node, level + 1)
@@ -261,7 +271,7 @@ def walk(node, law_id, crumb_titles, anchor_parts, out):
         paras = parse_paragraphs(article)
         record = {
             "title": title,
-            "caption": article.get("ArticleCaption") or "",
+            "caption": strip_markup(article.get("ArticleCaption") or ""),
             "crumbs": list(crumb_titles),
             "paras": paras,
         }
