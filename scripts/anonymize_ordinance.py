@@ -176,6 +176,14 @@ def main():
 
     for path in sorted(src_dir.glob("*.txt")):
         raw = path.read_text(encoding="utf-8")
+
+        # 先頭の「# 題名」行があれば、そこから題名を作る（無ければ火災予防条例とみなす）
+        doc_title = ""
+        if raw.startswith("# "):
+            head, _, rest = raw.partition("\n")
+            doc_title = head[2:].strip()
+            raw = rest
+
         masked, counts, candidates = anonymize(raw, name_pattern)
         for token, n in candidates.items():
             all_candidates[token] = all_candidates.get(token, 0) + n
@@ -190,10 +198,18 @@ def main():
                 "text": article["text"],
             })
 
+        # 題名も自治体名を伏せた形で持つ
+        if doc_title:
+            masked_title, _, _ = anonymize(doc_title.lstrip("○"), name_pattern)
+            if not masked_title.startswith(MASK_MUNI):
+                masked_title = MASK_MUNI + masked_title
+        else:
+            masked_title = MASK_MUNI + "火災予防条例"
+
         ordinances.append({
             "id": path.stem,
-            # 題名も自治体名を伏せた形で持つ
-            "title": "{}火災予防条例".format(MASK_MUNI),
+            "title": masked_title,
+            "kind": "規則" if masked_title.endswith("規則") else "条例",
             "muni_type": args.muni_type,
             "article_count": len(articles),
             "articles": articles,

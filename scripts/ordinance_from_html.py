@@ -32,7 +32,12 @@ def html_to_text(src):
     if body:
         src = body.group(1)
 
-    # 表のセル区切りは全角スペースにして1行に残す
+    # 表はセルの中にも<p>や<div>が入っていることがあり、そのまま改行すると
+    # 「標識名／巾／長さ／地／文字」が1行ずつに散ってしまう。
+    # 先にセル内のブロック要素を空白に潰してから、セル区切りを全角スペースにする。
+    def flatten_cell(m):
+        return re.sub(r'(?i)<' + BLOCK + r'[^>]*>', ' ', m.group(0))
+    src = re.sub(r'(?is)<t[dh][^>]*>.*?</t[dh]>', flatten_cell, src)
     src = re.sub(r'(?i)</t[dh]>\s*<t[dh][^>]*>', '　', src)
     # ブロック要素の終わりで改行
     src = re.sub(r'(?i)<' + BLOCK + r'[^>]*>', '\n', src)
@@ -74,7 +79,13 @@ def take_main_provision(lines):
         if start is not None:
             break
     if start is None:
-        return lines, 0, 0
+        # 施行規則のように章立てが無いものは、最初の条見出しから附則の手前までを本則とする
+        for i, line in enumerate(lines):
+            if body_head.match(line):
+                start = i
+                break
+        if start is None:
+            return lines, 0, 0
 
     end = len(lines)
     for i in range(start, len(lines)):
@@ -126,9 +137,17 @@ def main():
     else:
         lines, dropped_head, dropped_tail = take_main_provision(all_lines)
 
+    # 題名は本則の切り出しで落ちるので、ページの <title> から拾って先頭に残す。
+    # 匿名化スクリプトがこの行を読んで、マスク済みの題名を作る。
+    title = ''
+    m = re.search(r'(?is)<title>(.*?)</title>', src)
+    if m:
+        title = html.unescape(re.sub(r'<[^>]+>', '', m.group(1))).strip()
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    header = ['# ' + title] if title else []
+    out.write_text('\n'.join(header + lines) + '\n', encoding='utf-8')
 
     arts = sum(1 for l in lines if re.match(r'^第[〇一二三四五六七八九十百千0-9]+条', l))
     print('{} 行 / 条見出し {} 件 / {:,} 文字 を {} に書き出しました'.format(

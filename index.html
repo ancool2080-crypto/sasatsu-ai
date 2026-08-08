@@ -774,10 +774,14 @@ function buildIndex(){
 function buildOrdinanceIndex(){
   if (!DB.ords || !Array.isArray(DB.ords.ordinances)) return;
   for (const ord of DB.ords.ordinances){
+    const kind = ord.kind || '条例';
+    // 消防法施行規則と紛らわしくならないよう、条例側の規則は「条例規則」と表示する
+    const badge = kind === '規則' ? '条例規則' : '条例';
     for (const a of ord.articles || []){
       if (!a.title || !a.text) continue;
       DB.articles.push({
-        lawId: 'ord:' + ord.id, lawTitle: ord.title, short: '条例', isOrd: true,
+        lawId: 'ord:' + ord.id, groupId: 'ordkind:' + kind,
+        lawTitle: ord.title, short: badge, isOrd: true, ordKind: kind,
         muniType: ord.muni_type || '',
         enforcement: '', fetched: DB.ords.generated_at, sourceUrl: '',
         title: a.title, caption: '', crumbs: [], url: '',
@@ -875,6 +879,7 @@ function parseArticleNumber(title){
 /* 「建基令」が「令」に、「建築基準法」が「法」に食われないよう、
    長く具体的な略称から順に判定する。 */
 const LAW_ALIAS = [
+  { re:/(火災予防条例施行規則|条例施行規則|条例規則)/, id:'ordrule' },
   { re:/(火災予防条例|条例)/,            id:'ord' },
   { re:/(建築基準法施行令|建基令)/,       id:'325CO0000000338' },
   { re:/(建築基準法|建基法)/,            id:'325AC0000000201' },
@@ -900,7 +905,8 @@ function parseArticleQuery(raw){
 
 function matchArticleNumber(a, spec){
   if (!a.num) return false;
-  if (spec.lawId === 'ord'){ if (!a.isOrd) return false; }
+  if (spec.lawId === 'ordrule'){ if (!a.isOrd || a.ordKind !== '規則') return false; }
+  else if (spec.lawId === 'ord'){ if (!a.isOrd) return false; }
   else if (spec.lawId && a.lawId !== spec.lawId) return false;
   else if (!spec.lawId && a.isOrd) return false;   // 法令名の指定なしなら条例は出さない
   if (a.num.n !== spec.n) return false;
@@ -985,7 +991,7 @@ function badgeClass(short){
   if (short === '令') return '';
   if (short === '規則') return 'rule';
   if (short === '危政令') return 'kiken';
-  if (short === '条例') return 'ord';
+  if (short === '条例' || short === '条例規則') return 'ord';
   if (short === 'ノート') return 'note';
   if (short === '通知' || short === '消防庁' || short === '執務資料' || short === 'ガイド') return 'fdma';
   return 'kenchiku';
@@ -1332,7 +1338,8 @@ function renderLawChips(){
     esc(l.short) + '</button>').join('');
   for (const ord of (DB.ords && DB.ords.ordinances) || []){
     const id = 'ord:' + ord.id;
-    html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">条例</button>';
+    const lbl = (ord.kind || '条例') === '規則' ? '条例規則' : '条例';
+    html += '<button class="chip" data-law="' + esc(id) + '" onclick="toggleLawFilter(\'' + esc(id) + '\')">' + lbl + '</button>';
   }
   if (DB.fdma){
     // 標準マニュアルは個別に、執務資料・ガイドラインは種別でまとめて絞り込む
@@ -2011,7 +2018,7 @@ function renderFreshness(){
   }
   os.innerHTML = ords.map(o =>
     '<div style="margin:7px 0;font-size:13px">' +
-      '<span class="badge ord">条例</span>' + esc(o.title) +
+      '<span class="badge ord">' + ((o.kind || '条例') === '規則' ? '条例規則' : '条例') + '</span>' + esc(o.title) +
       (o.muni_type ? '（類型：' + esc(o.muni_type) + '）' : '') +
       '<div class="muted">本則 ' + (o.article_count || 0) + '条／自治体名 ' +
       ((o.masked_counts && o.masked_counts['自治体名']) || 0) + '件・消防本部等 ' +
