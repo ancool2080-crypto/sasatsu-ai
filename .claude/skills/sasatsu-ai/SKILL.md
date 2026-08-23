@@ -69,8 +69,9 @@ scripts/              データ生成・検証スクリプト（下記）
 過剰マスクにも注意。一度、国の基準である「平成14年消防庁告示第1号」まで伏せてしまい、
 離隔距離の根拠が読めなくなった。国の機関名が直前にある告示は残す実装が入っている。
 
-**リポジトリのどこにも自治体名を書かない。** README に「千葉県旭市の条例を収録」と
-書いてしまったことがあり、これだとマスクした意味が消える。`check_publish_safety.py` が
+**リポジトリのどこにも自治体名を書かない。** README に収録元の自治体名を書いてしまった
+ことがあり、これだとデータをマスクした意味が消える。**この注意書き自体に実例として
+自治体名を書くのも同じ漏えいなので書かないこと**（実際にこれもやらかした）。`check_publish_safety.py` が
 これを検出する。公開前とデータ追記後に必ず走らせること。
 
 ### 2. 外部送信の前に見せる
@@ -112,31 +113,12 @@ AI解説と図面読み取りは Anthropic に送信する。送信前に**全�
 `index.html` を触ったら毎回これを通す。単一ファイルなので静的検査が効く。
 
 ```bash
-PYTHONIOENCODING=utf-8 python -c "
-import re
-from html.parser import HTMLParser
-src=open('index.html',encoding='utf-8').read()
-class V(HTMLParser):
-    def __init__(self):
-        super().__init__(); self.errors=[]; self.stack=[]
-        self.void={'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
-    def handle_starttag(self,t,a):
-        if t not in self.void: self.stack.append(t)
-    def handle_endtag(self,t):
-        if t in self.void: return
-        if self.stack and self.stack[-1]==t: self.stack.pop()
-        else: self.errors.append('</%s>'%t)
-v=V(); v.feed(src); print('HTML:','OK' if not v.errors and not v.stack else 'NG')
-funcs=set(re.findall(r'function\s+([A-Za-z0-9_]+)\s*\(',src))
-print('関数の重複:', sorted({f for f in funcs if len(re.findall(r'function\s+'+f+r'\s*\(',src))>1}) or 'なし')
-ids=set(re.findall(r'id=\"([A-Za-z0-9_-]+)\"',src)); refs=set(re.findall(r'getElementById\(.([A-Za-z0-9_-]+).\)',src))
-print('getElementById未定義:', sorted(refs-ids) or 'なし')
-declared=set(re.findall(r'(--[a-z-]+)\s*:',src.split('</style>')[0]))
-print('未定義CSS変数:', sorted(set(re.findall(r'var\((--[a-z-]+)\)',src))-declared) or 'なし')
-mods=set(re.findall(r'id=\"mod-([a-z]+)\"',src)); tabs=set(re.findall(r'data-mod=\"([a-z]+)\"',src))
-print('タブ/モジュール:', 'OK' if mods==tabs else '不一致 '+str(mods^tabs))
-"
+python scripts/check_html.py
 ```
+
+タグの対応・ID参照・関数の重複・CSS変数・タブの一致に加えて、**node があれば JavaScript の
+構文も検査する**。正規表現リテラルの中に生の改行が入って画面が真っ白になった事故があり、
+HTMLの検査だけでは素通りしたので、構文検査を通すようにしている。
 
 実機確認は `python -m http.server 8823 --bind 127.0.0.1` を上げてブラウザで見る。
 Service Worker のキャッシュが残るので、確認前に登録解除と `caches.delete()` をしてから再読込する。

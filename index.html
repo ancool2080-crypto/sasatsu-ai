@@ -142,6 +142,11 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.ord{background:var(--bark)}
 .badge.fdma{background:var(--sage)}
 .badge.note{background:var(--ochre)}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:6px}
+.tbl{border-collapse:collapse;font-size:12px;min-width:100%}
+.tbl th,.tbl td{border:1px solid var(--mist);padding:5px 7px;vertical-align:top;text-align:left;line-height:1.7}
+.tbl th{background:var(--cream);font-weight:700;white-space:nowrap}
+.tbl td{max-width:min(60vw,420px);white-space:pre-wrap}
 
 /* ---------- 設備判定 ---------- */
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -681,6 +686,7 @@ async function boot(){
     setProgress(88, '消防庁の通知・マニュアルを読み込み中…');
     DB.fdma = await getJSON('data/fdma.json').catch(() => null);
     DB.setsubi = await getJSON('data/setsubi.json').catch(() => null);
+    DB.syn = await getJSON('data/synonyms.json').catch(() => null);
     DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
     DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
@@ -708,8 +714,50 @@ async function getJSON(path){
 /* ---------------------------------------------------------------
    検索索引
    --------------------------------------------------------------- */
+/* 条文は「千五百平方メートル」、実務では「1500㎡」と書く。
+   検索語と条文の両方を同じ表記に寄せないと、面積や距離では永久に噛み合わない。
+   ただし「一部」「一般」まで数字にすると壊れるので、
+   単位や「第◯条」のように数として使われている箇所だけを変換する。 */
+const KANJI_DIGITS = { '〇':0,'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
+const KANJI_UNITS  = { '十':10,'百':100,'千':1000 };
+
+function kanjiNumToArabic(text){
+  if (/^[〇零一二三四五六七八九]+$/.test(text)){
+    let n = 0;
+    for (const c of text) n = n * 10 + KANJI_DIGITS[c];
+    return n;
+  }
+  let total = 0, cur = 0, man = 0;
+  for (const c of text){
+    if (c === '万'){ man += (total + cur) * 10000; total = 0; cur = 0; continue; }
+    if (c in KANJI_DIGITS){ cur = KANJI_DIGITS[c]; continue; }
+    if (c in KANJI_UNITS){ total += (cur || 1) * KANJI_UNITS[c]; cur = 0; continue; }
+    return null;
+  }
+  return man + total + cur;
+}
+
+const K = '[〇零一二三四五六七八九十百千万]+';
+const NUM_UNIT_RE  = new RegExp('(' + K + ')(?=平方メートル|メートル|平方米|平米|m2|㎡|坪|階|人|個|時間|分|年|月|日|倍)', 'g');
+const NUM_ARTICLE_RE = new RegExp('第(' + K + ')(?=条|項|号|章|節|款|目|種|類)', 'g');
+
+function normalizeNumbers(s){
+  s = s.replace(NUM_ARTICLE_RE, (m, g) => {
+    const n = kanjiNumToArabic(g);
+    return n === null ? m : '第' + n;
+  });
+  return s.replace(NUM_UNIT_RE, (m, g) => {
+    const n = kanjiNumToArabic(g);
+    return n === null ? m : String(n);
+  });
+}
+
 function normalize(s){
-  return (s || '').normalize('NFKC').toLowerCase()
+  s = (s || '').normalize('NFKC').toLowerCase();
+  s = normalizeNumbers(s);
+  return s
+    .replace(/平方メートル|平方米|平米|m2|㎡/g, '㎡')
+    .replace(/メートル/g, 'm')
     .replace(/[\s　]+/g, '')
     .replace(/[，、。．・「」（）()]/g, '');
 }
@@ -747,6 +795,7 @@ function buildIndex(){
     }
   }
 
+  buildAppdxIndex();
   buildOrdinanceIndex();
   buildFdmaIndex();
 
@@ -767,6 +816,32 @@ function buildIndex(){
     }
   }
   DB.dict = [...dict].filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
+/* 別表（令別表第二の消火器の適応性、危政令別表第四の指定可燃物の数量など）を
+   検索対象に加える。条文本体には数値が書かれておらず表にしかない基準が多いため、
+   ここが引けないと「適応する消火器は何か」に答えられない。 */
+function buildAppdxIndex(){
+  for (const meta of DB.index.laws){
+    const law = DB.laws[meta.law_id];
+    if (!law || !law.appdx) continue;
+    for (const t of law.appdx){
+      if (!t.rows || !t.rows.length) continue;
+      const flat = t.rows.map(r => r.join(' ')).join('\n');
+      DB.articles.push({
+        lawId: meta.law_id, groupId: 'appdx', lawTitle: law.law_title,
+        short: law.short, isAppdx: true, rows: t.rows,
+        enforcement: law.enforcement_date, fetched: law.fetched_at,
+        sourceUrl: law.source_url,
+        title: t.title, caption: t.related || '',
+        crumbs: [], url: law.source_url,
+        paras: [{ num: '1', text: flat }],
+        nTitle: normalize(law.short + t.title),
+        nCaption: normalize(t.related || ''), nCrumbs: '',
+        nBody: normalize(flat), num: null
+      });
+    }
+  }
 }
 
 /* 匿名化済みの火災予防条例を、法令と同じ形で検索対象に加える。
@@ -943,6 +1018,23 @@ function countOccurrences(hay, needle, cap){
   return n;
 }
 
+/* 実務の言い方から条文へ橋を架ける。
+   「既存不適格」「面積区画」のように条文に存在しない語は、
+   同義語を足すだけでなく、確実に見せたい条を先頭に固定するのが早い。 */
+function synonymLookup(raw){
+  if (!DB.syn) return { terms: [], refs: [], words: [] };
+  const q = normalize(raw);
+  const terms = [], refs = [], words = [];
+  for (const e of DB.syn.entries){
+    const keys = [e.word].concat(e.also || []);
+    if (!keys.some(k => q.includes(normalize(k)))) continue;
+    words.push(e.word);
+    for (const t of e.terms || []) terms.push(t);
+    for (const r of e.refs || []) refs.push(r);
+  }
+  return { terms, refs, words };
+}
+
 function searchArticles(raw, opts){
   opts = opts || {};
   const spec = parseArticleQuery(raw);
@@ -951,8 +1043,22 @@ function searchArticles(raw, opts){
     if (hits.length) return hits.map(a => ({ art:a, score:1000 }));
   }
 
-  const terms = extractTerms(raw);
+  const syn = synonymLookup(raw);
+  const terms = [...new Set(extractTerms(raw).concat(syn.terms.map(normalize)))].filter(Boolean);
   if (!terms.length) return [];
+
+  const pinned = [];
+  const pinnedIds = new Set();
+  for (const r of syn.refs){
+    // 基準が条文ではなく別表にしか書かれていないものがある（消火器の適応性など）
+    const a = r.appdx
+      ? DB.articles.find(x => x.isAppdx && x.lawId === r.law_id && x.title === r.appdx)
+      : findArticle(r.law_id, r.article);
+    if (a && !pinnedIds.has(a.lawId + a.title)){
+      pinnedIds.add(a.lawId + a.title);
+      pinned.push({ art: a, score: 900, pinned: true, point: r.point });
+    }
+  }
 
   const out = [];
   for (const a of DB.articles){
@@ -962,7 +1068,13 @@ function searchArticles(raw, opts){
     for (const t of terms){
       const w = Math.min(t.length, 6);
       let s = 0;
-      if (a.nCaption.includes(t)) s += 7 * w;
+      if (a.nCaption.includes(t)){
+        // 見出しが「防火区画」そのものの条は、
+        // 「技術的基準から除かれる防火区画…」のような枝葉の条より確実に上に出したい。
+        // 一致した語が見出しに占める割合で重みを付ける。
+        const cover = t.length / Math.max(a.nCaption.length, 1);
+        s += 7 * w * (1 + cover * 1.6);
+      }
       if (a.nTitle.includes(t))   s += 3 * w;
       if (a.nCrumbs.includes(t))  s += 2 * w;
       const bodyHits = countOccurrences(a.nBody, t, 4);
@@ -975,7 +1087,8 @@ function searchArticles(raw, opts){
     out.push({ art:a, score });
   }
   out.sort((x, y) => y.score - x.score);
-  return out.slice(0, opts.limit || 25);
+  const rest = out.filter(x => !pinnedIds.has(x.art.lawId + x.art.title));
+  return pinned.concat(rest).slice(0, opts.limit || 25);
 }
 
 /* ---------------------------------------------------------------
@@ -1014,10 +1127,22 @@ function renderArticle(a, point){
     }
     body += '</div>';
   }
+  if (a.isAppdx){
+    body = '<div class="tbl-wrap"><table class="tbl">' +
+      a.rows.map((r, i) =>
+        '<tr>' + r.map(c =>
+          '<' + (i === 0 ? 'th' : 'td') + '>' + esc(c) + '</' + (i === 0 ? 'th' : 'td') + '>'
+        ).join('') + '</tr>').join('') +
+      '</table></div>';
+  }
+
   let foot;
   if (a.isOrd){
     foot = '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
            '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>';
+  } else if (a.isAppdx){
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+           '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
   } else if (a.isKnowhow){
     foot = '<span class="fresh">自分のノート（この端末にのみ保存）</span>' +
            '<span class="fresh">更新 ' + esc(fmtDate(a.fetched)) + '</span>';
@@ -1031,7 +1156,7 @@ function renderArticle(a, point){
            '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
   }
 
-  const bodyLabel = a.isFdma ? '本文を表示 ▾' : '条文を表示 ▾';
+  const bodyLabel = a.isAppdx ? '表を表示 ▾' : (a.isFdma ? '本文を表示 ▾' : '条文を表示 ▾');
 
   return '' +
   '<div class="art">' +

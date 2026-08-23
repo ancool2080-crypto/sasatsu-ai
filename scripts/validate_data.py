@@ -28,6 +28,11 @@ def check_refs(laws, refs, where, problems):
         if law is None:
             problems.append("{}: 未収録の法令 {}".format(where, ref["law_id"]))
             continue
+        # 基準が別表にしかないものは条ではなく別表を指す
+        if ref.get("appdx"):
+            if ref["appdx"] not in law["appdx"]:
+                problems.append("{}: 存在しない別表 {} {}".format(where, law["title"], ref["appdx"]))
+            continue
         article = law["articles"].get(ref["article"])
         if article is None:
             problems.append("{}: 存在しない条 {} {}".format(where, law["title"], ref["article"]))
@@ -48,6 +53,7 @@ def main():
         laws[law["law_id"]] = {
             "title": law["law_title"],
             "articles": {a["title"]: a for a in law["articles"]},
+            "appdx": {t["title"] for t in law.get("appdx", [])},
         }
 
     problems = []
@@ -85,6 +91,18 @@ def main():
                     problems.append("防火管理: 令別表第一 {} がどのルールにも入っていません".format(key))
             counts["防火管理"] = "{}ルール / 用途{}区分を判定".format(
                 len(boka["rules"]), len(yoto["items"]))
+
+    # 用語辞書
+    syn = load(root, "data/synonyms.json")
+    if syn:
+        words = set()
+        for e in syn["entries"]:
+            if e["word"] in words:
+                problems.append("用語辞書: 重複する見出し語 {}".format(e["word"]))
+            words.add(e["word"])
+            check_refs(laws, e.get("refs", []), "用語辞書/" + e["word"], problems)
+        counts["用語辞書"] = "{}語 / {}参照".format(
+            len(syn["entries"]), sum(len(e.get("refs", [])) for e in syn["entries"]))
 
     # 執行手続き
     enf = load(root, "data/enforcement.json")
