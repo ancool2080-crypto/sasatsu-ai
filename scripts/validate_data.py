@@ -104,6 +104,19 @@ def main():
         counts["用語辞書"] = "{}語 / {}参照".format(
             len(syn["entries"]), sum(len(e.get("refs", [])) for e in syn["entries"]))
 
+    # 遡及適用
+    sk = load(root, "data/sokyu.json")
+    if sk:
+        check_refs(laws, sk["refs"], "遡及適用/refs", problems)
+        ids = set()
+        for block in ("kaisei", "youto"):
+            for ex in sk[block]["exceptions"]:
+                if ex["id"] in ids:
+                    problems.append("遡及適用: 重複するID {}".format(ex["id"]))
+                ids.add(ex["id"])
+        counts["遡及適用"] = "常時遡及{}件 / 例外{}件".format(
+            len(sk["always_retroactive"]["items"]), len(ids))
+
     # 執行手続き
     enf = load(root, "data/enforcement.json")
     fdma = load(root, "data/fdma.json")

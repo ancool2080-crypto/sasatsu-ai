@@ -486,6 +486,17 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
         </select>
         <label class="chk"><input type="checkbox" id="s-nanen" onchange="runSetsubi()">
           壁及び天井の室内に面する部分の仕上げが難燃材料</label>
+        <label class="chk"><input type="checkbox" id="s-chika" onchange="runSetsubi()">
+          地階がある</label>
+        <label class="chk"><input type="checkbox" id="s-musou" onchange="runSetsubi()">
+          無窓階がある</label>
+        <div class="row2">
+          <div>
+            <label class="fld">地階・無窓階・3階以上の階の床面積（最大・㎡）</label>
+            <input type="number" id="s-kaimen" inputmode="decimal" placeholder="任意" oninput="runSetsubi()">
+          </div>
+          <div></div>
+        </div>
         <div class="row2">
           <div>
             <label class="fld">電気設備がある場所の床面積（㎡）</label>
@@ -498,6 +509,34 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
         </div>
       </div>
       <div id="setsubi-result"></div>
+
+      <div class="card">
+        <h3>⏳ 遡及適用（既存不適格）の判定</h3>
+        <div class="muted">基準が改正されたとき、既存の対象物に新しい基準が及ぶかを当たり付けします。
+          用途区分は上の「対象物の条件」で選んだものを使います。</div>
+        <label class="fld">どちらの筋道か</label>
+        <select id="sk-mode" onchange="runSokyu()">
+          <option value="kaisei">基準が改正された（法第17条の2の5）</option>
+          <option value="youto">用途を変更した（法第17条の3）</option>
+        </select>
+        <div class="row2">
+          <div>
+            <label class="fld">増築・改築部分の床面積（㎡）</label>
+            <input type="number" id="sk-zou" inputmode="decimal" placeholder="無ければ空欄" oninput="runSokyu()">
+          </div>
+          <div>
+            <label class="fld">基準時の延べ面積（㎡）</label>
+            <input type="number" id="sk-base" inputmode="decimal" placeholder="無ければ空欄" oninput="runSokyu()">
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" id="sk-shuzen" onchange="runSokyu()">
+          主要構造部である壁の過半の修繕・模様替えをした</label>
+        <label class="chk"><input type="checkbox" id="sk-tekigou" onchange="runSokyu()">
+          いったん現行基準に適合させた</label>
+        <label class="chk"><input type="checkbox" id="sk-futekigou" onchange="runSokyu()">
+          変更前から基準に適合していなかった（用途変更のとき）</label>
+        <div id="sokyu-result"></div>
+      </div>
     </section>
 
     <!-- ============ ノウハウノート ============ -->
@@ -687,6 +726,7 @@ async function boot(){
     DB.fdma = await getJSON('data/fdma.json').catch(() => null);
     DB.setsubi = await getJSON('data/setsubi.json').catch(() => null);
     DB.syn = await getJSON('data/synonyms.json').catch(() => null);
+    DB.sokyu = await getJSON('data/sokyu.json').catch(() => null);
     DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
     DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
@@ -2196,6 +2236,10 @@ function runSetsubi(){
   const floors = parseInt(document.getElementById('s-floors').value, 10) || 0;
   const denki = parseFloat(document.getElementById('s-denki').value) || 0;
   const kaki = parseFloat(document.getElementById('s-kaki').value) || 0;
+  const chika = document.getElementById('s-chika').checked;
+  const musou = document.getElementById('s-musou').checked;
+  const kaimen = parseFloat(document.getElementById('s-kaimen').value) || 0;
+  const floorCond = { chika, musou, kaimen, floors };
 
   let html = '<div class="disclaimer no-print"><strong>これは当たり付けです。</strong>' +
     'ただし書・緩和・特例・階ごとの基準は入っていません。設置義務の確定は必ず条文本文で判断してください。</div>';
@@ -2206,16 +2250,46 @@ function runSetsubi(){
     '<div class="muted" style="margin-top:5px">延べ面積 ' + area.toLocaleString() + '㎡' +
     (floors ? '／地階を除く階数 ' + floors : '') +
     '／' + (kouzou === 'taika' ? '耐火構造' : kouzou === 'juntaika' ? '準耐火構造' : '耐火構造でない') +
-    (nanen ? '・内装難燃' : '') + '</div></div>';
+    (nanen ? '・内装難燃' : '') +
+    (chika ? '／地階あり' : '') + (musou ? '／無窓階あり' : '') +
+    (kaimen ? '／該当階の床面積 ' + kaimen.toLocaleString() + '㎡' : '') + '</div></div>';
 
   if (zumenReading) html += renderZumenSetsubi(zumenReading);
-  html += renderShokaki(yoto, area, kouzou, nanen, denki, kaki);
+  html += renderShokaki(yoto, area, kouzou, nanen, denki, kaki, floorCond);
   html += renderSetsubiList(yoto, area, floors);
   html += renderShuyouJinin(yoto);
-  return void (box.innerHTML = html);
+  box.innerHTML = html;
+  runSokyu();
+  return;
 }
 
-function renderShokaki(yoto, area, kouzou, nanen, denki, kaki){
+/* 令第10条第1項第5号：地階・無窓階・3階以上の階で床面積50㎡以上の部分。
+   延べ面積の要件を満たさない対象物でも、ここに当たれば消火器具が要る。
+   延べ面積だけ見ていると落としやすい見落としなので、独立して判定する。 */
+function renderGokan(fc){
+  if (!fc) return '';
+  const target = fc.chika || fc.musou || (fc.floors >= 3);
+  if (!target){
+    return '<div class="muted" style="margin-top:6px">地階・無窓階・3階以上の階に該当しないため、' +
+      '令第10条第1項第5号による設置義務はありません。</div>';
+  }
+  const which = [fc.chika ? '地階' : '', fc.musou ? '無窓階' : '', fc.floors >= 3 ? '3階以上の階' : '']
+    .filter(Boolean).join('・');
+  if (!fc.kaimen){
+    return '<div class="note" style="margin-top:6px"><strong>' + esc(which) + '</strong>があります。' +
+      'その階の床面積が50㎡以上なら、令第10条第1項第5号により消火器具が必要です。' +
+      '該当階の床面積を入れると判定します。</div>';
+  }
+  if (fc.kaimen >= 50){
+    return '<div class="hit-note" style="margin-top:6px"><strong>令第10条第1項第5号に該当します</strong><br>' +
+      esc(which) + 'の床面積 ' + fc.kaimen.toLocaleString() + '㎡ ≧ 50㎡ のため、' +
+      'その部分に消火器具が必要です。延べ面積の要件とは別に判断します。</div>';
+  }
+  return '<div class="ok-note" style="margin-top:6px">' + esc(which) + 'の床面積 ' +
+    fc.kaimen.toLocaleString() + '㎡ は50㎡未満のため、令第10条第1項第5号には当たりません。</div>';
+}
+
+function renderShokaki(yoto, area, kouzou, nanen, denki, kaki, fc){
   const S = DB.setsubi.shokaki;
 
   // 設置義務
@@ -2231,9 +2305,8 @@ function renderShokaki(yoto, area, kouzou, nanen, denki, kaki){
   } else if (area < gimu.area){
     html += '<div class="ok-note">延べ面積 ' + area.toLocaleString() + '㎡ は ' +
       gimu.area.toLocaleString() + '㎡ 未満のため、' + esc(gimu.ref) +
-      'による設置義務には当たりません。</div>' +
-      '<div class="muted" style="margin-top:6px">ただし、地階・無窓階・3階以上の階で床面積50㎡以上の部分' +
-      '（令第10条第1項第5号）や、少量危険物・指定可燃物がある場合（同項第4号）は別途必要です。</div>';
+      'による設置義務には当たりません。</div>' + renderGokan(fc) +
+      '<div class="muted" style="margin-top:6px">少量危険物・指定可燃物がある場合（令第10条第1項第4号）も別途必要です。</div>';
   } else {
     html += '<div class="hit-note"><strong>設置義務あり</strong>　' + esc(gimu.ref) + '（' + esc(gimu.desc) + '）</div>';
 
@@ -2268,6 +2341,8 @@ function renderShokaki(yoto, area, kouzou, nanen, denki, kaki){
       }
     }
   }
+
+  html += renderGokan(fc);
 
   html += '<div class="note" style="margin-top:10px">' +
     S.extras.map(e => '<strong>' + esc(e.label) + '</strong>（' + esc(e.ref) + '）<br>' + esc(e.desc)).join('<br><br>') +
@@ -2662,6 +2737,103 @@ function applyZumen(){
   if (f) document.getElementById('s-floors').value = f;
   runSetsubi();
   document.getElementById('setsubi-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* =====================================================================
+   遡及適用（既存不適格）の判定
+   基準が改正されても既存の対象物には及ばない、というのが原則で、
+   その例外に当たるかどうかを見る。実務で最も間違えやすい論点なので、
+   「原則」と「例外に当たったか」を分けて見せることを優先している。
+   ===================================================================== */
+function runSokyu(){
+  const box = document.getElementById('sokyu-result');
+  if (!box || !DB.sokyu) return;
+
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  if (!yoto){
+    box.innerHTML = '<div class="empty">上で用途区分を選んでください。</div>';
+    return;
+  }
+
+  const S = DB.sokyu;
+  const mode = document.getElementById('sk-mode').value;
+  const zou  = parseFloat(document.getElementById('sk-zou').value) || 0;
+  const base = parseFloat(document.getElementById('sk-base').value) || 0;
+  const shuzen = document.getElementById('sk-shuzen').checked;
+  const tekigou = document.getElementById('sk-tekigou').checked;
+  const futekigou = document.getElementById('sk-futekigou').checked;
+
+  const block = mode === 'kaisei' ? S.kaisei : S.youto;
+  let html = '<div class="disclaimer no-print">これは当たり付けです。' +
+    '実際の遡及の有無は、当該改正の<strong>附則の経過措置</strong>で決まることが多いため、' +
+    '必ず改正法令の附則を確認してください。</div>';
+
+  // 1. そもそも適用除外にならない設備
+  const AR = S.always_retroactive;
+  const always = AR.items.filter(it => !it.kou || kouMatches(it.kou, yoto));
+  html += '<div class="hit-note" style="margin-top:10px"><strong>' + esc(AR.label) + '</strong>（' +
+    esc(AR.ref) + '）<br>' +
+    always.map(it => '・' + esc(it.label) + '<span class="muted">（' + esc(it.num) + '）</span>').join('<br>') +
+    '<br>・' + esc(AR.law_excluded.label) + '<span class="muted">（' + esc(AR.law_excluded.note) + '）</span>' +
+    '</div><div class="muted" style="margin-top:5px">' + esc(AR.note) + '</div>';
+
+  // 2. 原則と例外
+  html += '<div class="ok-note" style="margin-top:12px"><strong>原則</strong>　' + esc(block.principle) + '</div>';
+
+  const hit = [], miss = [], unknown = [];
+  for (const ex of block.exceptions){
+    let state = 'unknown', why = '';
+    if (ex.auto === 'tokutei' || ex.auto === 'tokutei_after'){
+      state = yoto.tokutei ? 'hit' : 'miss';
+      why = yoto.tokutei ? esc(yoto.label.slice(0, 26)) + ' は特定防火対象物です'
+                         : '選んだ用途は特定防火対象物ではありません';
+    } else if (ex.id === 'zouchiku' || ex.id === 'zouchiku_go'){
+      if (!zou){ state = 'unknown'; why = '増築・改築の面積が未入力です'; }
+      else if (zou >= 1000){ state = 'hit'; why = '増改築 ' + zou.toLocaleString() + '㎡ ≧ 1,000㎡'; }
+      else if (base && zou >= base / 2){
+        state = 'hit';
+        why = '増改築 ' + zou.toLocaleString() + '㎡ ≧ 基準時の延べ面積の2分の1（' + (base / 2).toLocaleString() + '㎡）';
+      } else if (!base){ state = 'unknown'; why = '基準時の延べ面積が未入力のため2分の1の判定ができません'; }
+      else { state = 'miss'; why = '1,000㎡未満かつ基準時の2分の1未満'; }
+    } else if (ex.id === 'shuzen'){
+      state = shuzen ? 'hit' : 'miss';
+      why = shuzen ? '壁の過半の修繕・模様替えに当たる' : '該当なし';
+    } else if (ex.id === 'tekigou' || ex.id === 'tekigou_go'){
+      state = tekigou ? 'hit' : 'miss';
+      why = tekigou ? '適合させた後は現行基準で維持する' : '該当なし';
+    } else if (ex.id === 'futekigou'){
+      state = futekigou ? 'hit' : 'miss';
+      why = futekigou ? '変更前から違反状態だった' : '該当なし';
+    }
+    const row = { ex, why };
+    (state === 'hit' ? hit : state === 'miss' ? miss : unknown).push(row);
+  }
+
+  if (hit.length){
+    html += '<div class="hit-note" style="margin-top:12px"><strong>遡及する可能性が高い</strong>' +
+      '（' + esc(block.label) + 'の例外に当たります）<br>' +
+      hit.map(r => '・' + esc(r.ex.label) + '<span class="muted">（' + esc(r.ex.num) + '）— ' +
+        esc(r.why) + '</span><br>　' + esc(r.ex.detail)).join('<br><br>') + '</div>';
+  } else if (unknown.length){
+    html += '<div class="note" style="margin-top:12px"><strong>判定できていない項目があります</strong><br>' +
+      unknown.map(r => '・' + esc(r.ex.label) + ' — ' + esc(r.why)).join('<br>') + '</div>';
+  } else {
+    html += '<div class="ok-note" style="margin-top:12px"><strong>例外に当たりません</strong><br>' +
+      '原則どおり、従前の基準のままでよい可能性が高いです。' +
+      'ただし上に挙げた「適用除外にならない消防用設備等」は別途、現行基準で判断します。</div>';
+  }
+
+  if (miss.length){
+    html += '<div class="muted" style="margin-top:8px">当たらなかった例外：' +
+      miss.map(r => esc(r.ex.label)).join('、') + '</div>';
+  }
+
+  html += S.refs.map(r => {
+    const a = findArticle(r.law_id, r.article);
+    return a ? renderArticle(a, r.point) : '';
+  }).join('');
+  box.innerHTML = html;
 }
 
 /* =====================================================================
@@ -3117,6 +3289,7 @@ function initUI(){
   runBoka();
   initSetsubi();
   runSetsubi();
+  runSokyu();
   refreshKnowhowIndex();
   renderKnowhow();
   renderFlowChips();
