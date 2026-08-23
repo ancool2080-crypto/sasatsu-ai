@@ -537,6 +537,14 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
           変更前から基準に適合していなかった（用途変更のとき）</label>
         <div id="sokyu-result"></div>
       </div>
+
+      <div class="card">
+        <h3>📅 点検・報告の期限</h3>
+        <div class="muted">用途区分は上の「対象物の条件」で選んだものを使います。</div>
+        <label class="fld">前回の報告日</label>
+        <input type="date" id="tk-last" oninput="runTenken()">
+        <div id="tenken-result"></div>
+      </div>
     </section>
 
     <!-- ============ ノウハウノート ============ -->
@@ -727,6 +735,8 @@ async function boot(){
     DB.setsubi = await getJSON('data/setsubi.json').catch(() => null);
     DB.syn = await getJSON('data/synonyms.json').catch(() => null);
     DB.sokyu = await getJSON('data/sokyu.json').catch(() => null);
+    DB.tenken = await getJSON('data/tenken.json').catch(() => null);
+    DB.jinin = await getJSON('data/jinin.json').catch(() => null);
     DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
     DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
@@ -1150,6 +1160,12 @@ function badgeClass(short){
   return 'kenchiku';
 }
 function fmtDate(iso){ return (iso || '').slice(0, 10); }
+/* Date を地方時のまま YYYY-MM-DD にする。
+   toISOString() は UTC に直すため、JST の午前0時が前日になってしまう。 */
+function fmtLocalDate(d){
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
 
 let artSeq = 0;
 function renderArticle(a, point){
@@ -2260,6 +2276,8 @@ function runSetsubi(){
   html += renderShuyouJinin(yoto);
   box.innerHTML = html;
   runSokyu();
+  runTenken();
+  renderJininForm();
   return;
 }
 
@@ -2453,6 +2471,7 @@ function renderShuyouJinin(yoto){
       (sub ? '<div class="calc-row"><span>区分</span><span>' + esc(sub) + '</span></div>' : '') +
       '<div style="white-space:pre-wrap;font-size:12.5px;line-height:1.9">' + esc(method) + '</div></div>';
   }
+  html += '<div id="jinin-form" style="margin-top:10px"></div>';
   html += '<div class="note" style="margin-top:8px">従業者数や客席数は図面からは分かりません。' +
     '現地で確認した数を使ってください。（十六）項・（十六の二）項は用途ごとに算定して合算します（同条第2項）。</div>';
   const a = findArticle('336M50000008006', '第一条の三');
@@ -2833,6 +2852,165 @@ function runSokyu(){
     const a = findArticle(r.law_id, r.article);
     return a ? renderArticle(a, r.point) : '';
   }).join('');
+  box.innerHTML = html;
+}
+
+/* =====================================================================
+   点検・報告の期限
+   消防用設備等の点検報告（法第17条の3の3）と防火対象物点検報告（法第8条の2の2）は
+   別制度で周期も対象も違う。査察のたびに確認する項目なので、並べて出す。
+   ===================================================================== */
+function addMonths(date, months){
+  const d = new Date(date.getTime());
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + months);
+  if (d.getDate() < day) d.setDate(0);   // 月末調整
+  return d;
+}
+
+function runTenken(){
+  const box = document.getElementById('tenken-result');
+  if (!box || !DB.tenken) return;
+
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  if (!yoto){
+    box.innerHTML = '<div class="empty">上で用途区分を選んでください。</div>';
+    return;
+  }
+
+  const lastStr = document.getElementById('tk-last').value;
+  const last = lastStr ? new Date(lastStr + 'T00:00:00') : null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  let html = '';
+  for (const kind of DB.tenken.kinds){
+    const rule = kind.rules.find(r => !r.kou.length || kouMatches(r.kou, yoto));
+    html += '<div class="card" style="margin-top:10px"><h3>' + esc(kind.label) + '</h3>';
+    if (!rule){
+      html += '<div class="muted">この用途は報告義務の一覧にありません。条文で確認してください。</div>';
+    } else {
+      html += '<div class="calc">' +
+        '<div class="calc-row"><span>報告の周期</span><span>' + esc(rule.label) +
+        '（' + esc(rule.ref) + '）</span></div>';
+      if (last){
+        const next = addMonths(last, rule.months);
+        const days = Math.round((next - today) / 86400000);
+        html += '<div class="calc-row"><span>前回の報告</span><span>' + esc(fmtLocalDate(last)) + '</span></div>' +
+          '<div class="calc-row total"><span>次回の期限</span><span>' + esc(fmtLocalDate(next)) + '</span></div>';
+        html += '</div>';
+        if (days < 0){
+          const kon = kind.id === 'bokataishobutsu' ? '法第8条の2の2' : '法第17条の3の3';
+          html += '<div class="hit-note" style="margin-top:8px"><strong>期限を ' + Math.abs(days) +
+            '日 超過しています</strong><br>未報告であれば、' + kon +'に基づく報告義務違反として整理できます。</div>';
+        } else if (days <= 60){
+          html += '<div class="note" style="margin-top:8px">期限まであと ' + days + '日です。</div>';
+        } else {
+          html += '<div class="ok-note" style="margin-top:8px">期限まであと ' + days + '日です。</div>';
+        }
+      } else {
+        html += '</div><div class="muted" style="margin-top:6px">前回の報告日を入れると次回の期限を計算します。</div>';
+      }
+      if (kind.id === 'bokataishobutsu' && !yoto.tokutei){
+        html += '<div class="muted" style="margin-top:6px">この用途は特定防火対象物ではないため、' +
+          '防火対象物点検の対象外である可能性が高いです（令第4条の2の2）。</div>';
+      }
+    }
+    html += '<div class="muted" style="margin-top:6px">' + esc(kind.tenken_note) + '</div>';
+    html += kind.refs.map(r => {
+      const a = findArticle(r.law_id, r.article);
+      return a ? renderArticle(a, r.point) : '';
+    }).join('');
+    html += '</div>';
+  }
+  box.innerHTML = html;
+}
+
+/* =====================================================================
+   収容人員の計算補助
+   規則第1条の3の算定方法のうち、床面積や個数から機械的に出せる部分を計算する。
+   従業者数や客席数は図面から分からないので利用者に入れてもらう。
+   ここで出した数は防火管理者の選任義務と避難器具の判定に直結する。
+   ===================================================================== */
+function jininRuleFor(yoto){
+  if (!DB.jinin) return null;
+  return DB.jinin.rules.find(r => kouMatches(r.kou, yoto)) || null;
+}
+
+function renderJininForm(){
+  const box = document.getElementById('jinin-form');
+  if (!box) return;
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  if (!yoto){
+    box.innerHTML = '<div class="empty">上で用途区分を選んでください。</div>';
+    return;
+  }
+  const nf = DB.jinin && DB.jinin.no_formula;
+  if (nf && kouMatches(nf.kou, yoto)){
+    box.innerHTML = '<div class="note">' + esc(nf.note) + '</div>';
+    return;
+  }
+  const rule = jininRuleFor(yoto);
+  if (!rule){
+    box.innerHTML = '<div class="muted">この用途は計算式を用意していません。' +
+      '上の「収容人員の算定方法」に出ている条文で確認してください。</div>';
+    return;
+  }
+  box.innerHTML =
+    (rule.label ? '<div class="muted">区分：' + esc(rule.label) + '</div>' : '') +
+    rule.fields.map(f =>
+      '<label class="fld">' + esc(f.label) + '（' + esc(f.unit) + '）' +
+      (f.divisor !== 1 ? '<span class="muted"> ÷ ' + f.divisor + '</span>' : '') + '</label>' +
+      '<input type="number" inputmode="decimal" data-jinin="' + esc(f.id) +
+      '" placeholder="0" oninput="runJinin()">').join('') +
+    '<div id="jinin-result"></div>';
+  runJinin();
+}
+
+function runJinin(){
+  const box = document.getElementById('jinin-result');
+  if (!box) return;
+  const yv = document.getElementById('s-yoto').value;
+  const yoto = yv === '' ? null : DB.yoto.items[parseInt(yv, 10)];
+  const rule = yoto ? jininRuleFor(yoto) : null;
+  if (!rule) return;
+
+  let total = 0;
+  const rows = [];
+  for (const f of rule.fields){
+    const el = document.querySelector('[data-jinin="' + f.id + '"]');
+    const v = el ? (parseFloat(el.value) || 0) : 0;
+    if (!v) continue;
+    // 「1未満の端数は切り捨て」が原則。長いす席も床面積も同じ扱い。
+    const n = Math.floor(v / f.divisor);
+    total += n;
+    rows.push('<div class="calc-row"><span>' + esc(f.label.slice(0, 22)) + '</span><span>' +
+      (f.divisor === 1 ? v : v + ' ÷ ' + f.divisor + ' = ' + n) + (f.divisor === 1 ? '' : '') + '</span></div>');
+  }
+  if (!rows.length){ box.innerHTML = ''; return; }
+
+  let html = '<div class="calc">' + rows.join('') +
+    '<div class="calc-row total"><span>収容人員</span><span>' + total + ' 人</span></div></div>' +
+    '<div class="muted" style="margin-top:5px">端数は切り捨てて合算しています（規則第1条の3）。</div>';
+
+  // 防火管理者の選任義務にそのまま繋げる
+  if (DB.boka){
+    const rule2 = DB.boka.rules.find(r =>
+      kouMatches(r.kou, yoto) || (r.kou_conditional && kouMatches(r.kou_conditional, yoto)));
+    if (rule2){
+      const need = total >= rule2.threshold;
+      html += '<div class="' + (need ? 'hit-note' : 'ok-note') + '" style="margin-top:8px">' +
+        (need
+          ? '<strong>防火管理者の選任義務あり</strong>　収容人員 ' + total + '人 ≧ ' + rule2.threshold + '人（' + esc(rule2.ref) + '）'
+          : '収容人員 ' + total + '人 は ' + rule2.threshold + '人未満のため、' + esc(rule2.ref) + 'による選任義務には当たりません') +
+        '</div>';
+      if (need){
+        html += '<div class="muted" style="margin-top:5px">甲種・乙種の別は「防火管理者」タブで延べ面積と併せて判定できます。</div>';
+      }
+    }
+  }
+  html += '<div class="muted" style="margin-top:5px">避難器具の必要個数も収容人員で決まります（令第25条）。</div>';
   box.innerHTML = html;
 }
 
@@ -3290,6 +3468,7 @@ function initUI(){
   initSetsubi();
   runSetsubi();
   runSokyu();
+  runTenken();
   refreshKnowhowIndex();
   renderKnowhow();
   renderFlowChips();
