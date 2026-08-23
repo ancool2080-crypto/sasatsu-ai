@@ -2037,13 +2037,41 @@ const Sync = {
                after: () => { refreshKnowhowIndex(); renderKnowhow(); },
                sort: (a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '') }
   },
+  lastError: null,
+  lastSyncedAt: null,
+  /* 失敗を黙って握り潰すと、同期できていないことに後で気づくことになる。
+     書き込みが通ったかどうかは画面に出す。 */
+  note(err, where){
+    if (err){
+      this.lastError = (err.code || '') + ' ' + (err.message || err);
+      console.warn('同期に失敗（' + where + '）', err);
+    } else {
+      this.lastError = null;
+      this.lastSyncedAt = new Date();
+    }
+    updateSyncStatus();
+  },
   async push(kind, list){
     if (!this.enabled) return;
     const { doc, setDoc } = this.fsMod;
     try {
       await setDoc(doc(this.db, 'users', this.uid, 'data', kind),
         { items:list, updatedAt:new Date().toISOString() });
-    } catch(e){ console.warn('同期に失敗（' + kind + '）', e); }
+      this.note(null, kind);
+    } catch(e){ this.note(e, kind); }
+  },
+  /* 書いて読み戻すところまでやって、往復できることを確かめる */
+  async selfTest(){
+    if (!this.enabled) throw new Error('ログインしていません');
+    const { doc, setDoc, getDoc, deleteDoc } = this.fsMod;
+    const ref = doc(this.db, 'users', this.uid, 'data', '_selftest');
+    const stamp = new Date().toISOString();
+    await setDoc(ref, { stamp });
+    const snap = await getDoc(ref);
+    if (!snap.exists() || snap.data().stamp !== stamp) throw new Error('書き込んだ内容を読み戻せませんでした');
+    await deleteDoc(ref);
+    this.note(null, 'selftest');
+    return true;
   },
   async pushAll(list){ return this.push('memos', list); },
   async pullAll(){
@@ -2070,7 +2098,7 @@ const Sync = {
       def.write(merged);
       def.after();
       await this.push(kind, merged);
-    } catch(e){ console.warn('取得に失敗（' + kind + '）', e); }
+    } catch(e){ this.note(e, kind + 'の取得'); }
   }
 };
 
@@ -2079,12 +2107,54 @@ function updateSyncStatus(extra){
   if (!el) return;
   if (Sync.enabled){
     const flagged = getMemos().filter(m => detectSensitiveMemo(memoSensitiveText(m)).length).length;
-    el.innerHTML = '✅ Firebaseと同期中（PC・スマホで同じ内容になります）' +
+    const err = Sync.lastError;
+    el.innerHTML = '✅ Firebaseと同期中（査察メモとノウハウノート）' +
+      (Sync.lastSyncedAt && !err
+        ? '<div class="muted">最終同期 ' + esc(Sync.lastSyncedAt.toLocaleTimeString('ja-JP')) + '</div>' : '') +
+      (err
+        ? '<div class="attn"><strong>⚠ 同期に失敗しています</strong><br>' + esc(err.slice(0, 160)) +
+          '<br>' + esc(syncHint(err)) + '</div>'
+        : '') +
+      '<div class="row" style="margin-top:8px">' +
+        '<button class="btn sec sm" onclick="runSyncTest()">接続を確認</button>' +
+        '<button class="btn sec sm" onclick="runSyncPull()">今すぐ取得</button>' +
+      '</div>' +
       (flagged ? '<div class="attn">⚠ 同期対象のうち<strong>' + flagged + '件</strong>に固有名詞や' +
         '所属固有の記述があります。クラウドに保存されている状態です。</div>' : '');
   }
   else if (Sync.getConfig()) el.textContent = 'Firebase設定済み・未ログインです。' + (extra || '');
   else el.textContent = 'この端末のブラウザにのみ保存しています（同期なし）。' + (extra || '');
+}
+
+/* Firestore のエラーコードは短くて意味が取りにくいので、次にやることまで書く */
+function syncHint(err){
+  const e = String(err || '');
+  if (e.includes('permission-denied'))
+    return 'Firestoreの「ルール」タブに、設定画面のセキュリティルールを貼って公開できているか確認してください。';
+  if (e.includes('unauthorized-domain'))
+    return 'Authentication → 設定 → 承認済みドメイン に ' + location.hostname + ' を追加してください。';
+  if (e.includes('unavailable') || e.includes('network'))
+    return 'ネットワークに繋がっていない可能性があります。オフラインでも端末内には保存されています。';
+  if (e.includes('not-found'))
+    return 'Firestore Database がまだ作成されていない可能性があります。';
+  return '設定タブの手順を見直してください。';
+}
+
+async function runSyncPull(){
+  toast('取得しています…');
+  await Sync.pullAll();
+  toast(Sync.lastError ? '取得に失敗しました' : '取得しました');
+}
+
+async function runSyncTest(){
+  toast('確認しています…');
+  try {
+    await Sync.selfTest();
+    toast('往復できました。同期は正常です');
+  } catch(e){
+    Sync.note(e, 'selftest');
+    toast('確認に失敗：' + (e.code || e.message));
+  }
 }
 
 function openFirebaseSetup(){
