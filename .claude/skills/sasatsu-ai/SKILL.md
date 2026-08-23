@@ -120,6 +120,12 @@ AI解説と図面読み取りは Anthropic に送信する。送信前に**全�
   （node があれば構文検査もする）を必ず通す。
 - **日付が1日ずれる**：`toISOString()` は UTC に直すため、JST の午前0時が前日になる。
   日付の表示には `fmtLocalDate()` を使う。
+- **FirebaseのconfigはJSONではない**：コンソールが出すのはキーに引用符の無い
+  JavaScriptのオブジェクトリテラル。`JSON.parse` では必ず失敗する。
+  `parseFirebaseConfig()` が import 文の波かっこを避けつつ JSON に寄せてから読む。
+  貼り付けたテキストは実行しない（eval / new Function は使わない）。
+- **Firebaseの承認済みドメイン**：Authentication → 設定 → 承認済みドメインに
+  公開ドメインを足さないと `auth/unauthorized-domain` でログインできない。
 - **取ったのに使っていないデータ**：別表28件を取得しながら索引に入れておらず、
   消火器の適応性（令別表第二）も指定可燃物の数量（危政令別表第四）も引けなかった。
   データを足したら「アプリ側で実際に参照しているか」を `grep -c` で確かめる。

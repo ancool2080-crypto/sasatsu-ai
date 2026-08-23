@@ -2104,7 +2104,9 @@ function openFirebaseSetup(){
      '<code>' + esc(location.hostname) + '</code> を追加</strong>' +
      '（これを忘れるとログイン時に auth/unauthorized-domain で弾かれます）' +
    '</div>' +
-   '<label class="fld">firebaseConfig（{ ... } の中身をそのまま貼り付け）</label>' +
+   '<label class="fld">firebaseConfig（コンソールに出た形のまま貼り付けてください）</label>' +
+   '<div class="muted" style="margin-bottom:4px">const firebaseConfig = { … }; ごと貼っても、' +
+   '{ … } だけ貼っても読み取れます。</div>' +
    '<textarea class="f" id="fb-cfg" style="min-height:120px" placeholder=\'{"apiKey":"...","authDomain":"...","projectId":"...","appId":"..."}\'>' +
      esc(cfg ? JSON.stringify(cfg, null, 1) : '') + '</textarea>' +
    '<div class="row" style="margin-top:10px">' +
@@ -2125,16 +2127,60 @@ function openFirebaseSetup(){
   openModal(html);
 }
 
+/* Firebaseコンソールが出すのは JavaScript のオブジェクトリテラルで、
+   キーに引用符が無く JSON ではない。コンソールからコピーした形のまま
+   貼れないと使い物にならないので、こちらで JSON に寄せてから読む。
+   貼り付けたテキストを実行はしない（eval や new Function は使わない）。 */
+function parseFirebaseConfig(raw){
+  let t = String(raw || '');
+  t = t.replace(/```[a-z]*/gi, '').replace(/```/g, '');   // コードフェンス
+  t = t.replace(/<\/?script[^>]*>/gi, '');                // <script> タグ
+  t = t.replace(/\/\*[\s\S]*?\*\//g, '');                 // ブロックコメント
+  t = t.replace(/\/\/[^\n]*/g, '');                       // 行コメント
+
+  // import { initializeApp } from ... の波かっこを先に落とす。
+  // これを残すと、設定オブジェクトより前にある波かっこを拾ってしまう。
+  t = t.replace(/^[ \t]*(?:import|export)\b[^;\n]*;?/gm, '');
+
+  // firebaseConfig への代入があればそこから探す（後ろの initializeApp(...) に引っかからない）
+  const assign = t.search(/firebaseConfig\s*=/);
+  const start = t.indexOf('{', assign >= 0 ? assign : 0);
+  if (start < 0) throw new Error('{ } の部分が見つかりません');
+  let depth = 0, end = -1;
+  for (let i = start; i < t.length; i++){
+    if (t[i] === '{') depth++;
+    else if (t[i] === '}'){ depth--; if (depth === 0){ end = i; break; } }
+  }
+  if (end < 0) throw new Error('} が閉じていません');
+
+  let body = t.slice(start, end + 1)
+    .replace(/'([^']*)'/g, '"$1"')                        // シングルクオート
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')  // 引用符の無いキー
+    .replace(/,(\s*[}\]])/g, '$1');                       // 末尾のカンマ
+
+  return JSON.parse(body);
+}
+
 function saveFirebaseCfg(){
   const raw = document.getElementById('fb-cfg').value.trim();
+  if (!raw){ toast('firebaseConfig を貼り付けてください'); return; }
+  let cfg;
   try {
-    const cfg = JSON.parse(raw);
-    if (!cfg.apiKey || !cfg.projectId) throw new Error('apiKey と projectId が必要です');
-    localStorage.setItem(PREFIX + 'fbcfg', JSON.stringify(cfg));
-    toast('保存しました。ログインしてください');
-    closeModal();
-    Sync.init().then(() => openFirebaseLogin());
-  } catch(e){ toast('設定を読み取れません：' + e.message); }
+    cfg = parseFirebaseConfig(raw);
+  } catch(e){
+    toast('設定を読み取れません：' + e.message + '（コンソールの firebaseConfig をそのまま貼ってください）');
+    return;
+  }
+  const lacking = ['apiKey', 'projectId', 'appId'].filter(k => !cfg[k]);
+  if (lacking.length){
+    toast(lacking.join('・') + ' が見つかりません。ウェブアプリを追加したときの firebaseConfig か確認してください');
+    return;
+  }
+  if (!cfg.authDomain) cfg.authDomain = cfg.projectId + '.firebaseapp.com';
+  localStorage.setItem(PREFIX + 'fbcfg', JSON.stringify(cfg));
+  toast('保存しました（' + cfg.projectId + '）。ログインしてください');
+  closeModal();
+  Sync.init().then(() => openFirebaseLogin());
 }
 
 function openFirebaseLogin(){
