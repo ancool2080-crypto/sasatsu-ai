@@ -2025,30 +2025,52 @@ const Sync = {
     else await m.signInWithEmailAndPassword(this.auth, email, pass);
   },
   async signOut(){ await this.authMod.signOut(this.auth); },
-  async pushAll(list){
+  /* 同期する箱の定義。査察メモとノウハウノートは別の性格のデータなので
+     Firestore 上も別ドキュメントに分けている。 */
+  kinds: {
+    memos:   { key: 'memos',   read: () => getMemos(),
+               write: (list) => localStorage.setItem(PREFIX + 'memos', JSON.stringify(list)),
+               after: () => renderMemos(),
+               sort: (a, b) => (b.date || '').localeCompare(a.date || '') },
+    knowhow: { key: 'knowhow', read: () => getKnowhow(),
+               write: (list) => localStorage.setItem(KNOWHOW_KEY, JSON.stringify(list)),
+               after: () => { refreshKnowhowIndex(); renderKnowhow(); },
+               sort: (a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || '') }
+  },
+  async push(kind, list){
     if (!this.enabled) return;
     const { doc, setDoc } = this.fsMod;
     try {
-      await setDoc(doc(this.db, 'users', this.uid, 'data', 'memos'),
-        { memos:list, updatedAt:new Date().toISOString() });
-    } catch(e){ console.warn('同期に失敗', e); }
+      await setDoc(doc(this.db, 'users', this.uid, 'data', kind),
+        { items:list, updatedAt:new Date().toISOString() });
+    } catch(e){ console.warn('同期に失敗（' + kind + '）', e); }
   },
+  async pushAll(list){ return this.push('memos', list); },
   async pullAll(){
+    for (const [kind, def] of Object.entries(this.kinds)){
+      await this.pullKind(kind, def);
+    }
+  },
+  async pullKind(kind, def){
     const { doc, getDoc } = this.fsMod;
     try {
-      const snap = await getDoc(doc(this.db, 'users', this.uid, 'data', 'memos'));
-      if (!snap.exists()) { await this.pushAll(getMemos()); return; }
-      const remote = snap.data().memos || [];
-      const byId = new Map(getMemos().map(m => [m.id, m]));
-      for (const m of remote){
-        const cur = byId.get(m.id);
-        if (!cur || (m.updatedAt || '') > (cur.updatedAt || '')) byId.set(m.id, m);
+      const snap = await getDoc(doc(this.db, 'users', this.uid, 'data', kind));
+      const local = def.read();
+      if (!snap.exists()){ await this.push(kind, local); return; }
+      const d = snap.data();
+      // 以前は memos というフィールド名で保存していたので、両方受ける
+      const remote = d.items || d[kind] || [];
+      const byId = new Map(local.map(x => [x.id, x]));
+      for (const x of remote){
+        const cur = byId.get(x.id);
+        // 同じIDなら更新が新しいほうを採る
+        if (!cur || (x.updatedAt || '') > (cur.updatedAt || '')) byId.set(x.id, x);
       }
-      const merged = [...byId.values()].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      localStorage.setItem(PREFIX + 'memos', JSON.stringify(merged));
-      renderMemos();
-      await this.pushAll(merged);
-    } catch(e){ console.warn('取得に失敗', e); }
+      const merged = [...byId.values()].sort(def.sort);
+      def.write(merged);
+      def.after();
+      await this.push(kind, merged);
+    } catch(e){ console.warn('取得に失敗（' + kind + '）', e); }
   }
 };
 
@@ -2077,7 +2099,10 @@ function openFirebaseSetup(){
      '② Authentication →「メール/パスワード」を有効にする<br>' +
      '③ Firestore Database を作成（ロケーション asia-northeast1、本番環境モード）<br>' +
      '④「ルール」タブに下のセキュリティルールを貼って公開<br>' +
-     '⑤ プロジェクト設定 → ウェブアプリを追加して firebaseConfig をコピー' +
+     '⑤ プロジェクト設定 → ウェブアプリを追加して firebaseConfig をコピー<br>' +
+     '⑥ <strong>Authentication → 設定 → 承認済みドメイン に ' +
+     '<code>' + esc(location.hostname) + '</code> を追加</strong>' +
+     '（これを忘れるとログイン時に auth/unauthorized-domain で弾かれます）' +
    '</div>' +
    '<label class="fld">firebaseConfig（{ ... } の中身をそのまま貼り付け）</label>' +
    '<textarea class="f" id="fb-cfg" style="min-height:120px" placeholder=\'{"apiKey":"...","authDomain":"...","projectId":"...","appId":"..."}\'>' +
@@ -3030,6 +3055,7 @@ function getKnowhow(){
 function setKnowhow(list){
   localStorage.setItem(KNOWHOW_KEY, JSON.stringify(list));
   refreshKnowhowIndex();
+  if (window.Sync && Sync.enabled) Sync.push('knowhow', list);
 }
 
 /** ノウハウを検索索引に反映する（保存・削除のたびに入れ替える） */
