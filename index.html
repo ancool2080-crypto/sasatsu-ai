@@ -90,8 +90,16 @@ body{
   flex:1;text-align:center;padding:11px 4px 9px;font-size:12px;cursor:pointer;
   border:none;background:none;color:var(--bark-light);font-family:var(--font-sans);
   border-bottom:2.5px solid transparent;transition:.15s;
-}
-.nav-tab .ico{display:block;font-size:17px;margin-bottom:1px}
+;white-space:nowrap}
+.sprite{position:absolute;width:0;height:0;overflow:hidden}
+/* 図面の記号に寄せた線画。色はテキストから継承させ、選択状態の変化にそのまま追従させる */
+.ico,.mk{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square;stroke-linejoin:miter}
+.nav-tab .ico{display:block;width:21px;height:21px;margin:0 auto 3px}
+.mk{width:1em;height:1em;vertical-align:-.14em;margin-right:.35em;flex:none}
+.mk.terra{color:var(--terra)}
+.mk.sage{color:var(--sage-dark)}
+h3 .mk{width:1.08em;height:1.08em;margin-right:.4em}
+.search-go .ico{width:20px;height:20px;display:block}
 .nav-tab.active{color:var(--sage-dark);border-bottom-color:var(--sage);font-weight:700}
 
 .main{max-width:760px;margin:0 auto;padding:14px 12px 40px}
@@ -349,6 +357,30 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 </style>
 </head>
 <body>
+<svg class="sprite" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-shiteki" viewBox="0 0 20 20"><path d="M3 10h7"/><path d="M7 6.5 10.5 10 7 13.5"/><path d="M17.5 4.5h-4v11"/></symbol>
+<symbol id="i-jobun" viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/><path d="M6.2 7.6h5.6M6.2 10.4h3.8"/><path d="m13.6 13.6 4 4"/></symbol>
+<symbol id="i-boka" viewBox="0 0 20 20"><circle cx="10" cy="6.5" r="3"/><path d="M4 17c0-3.3 2.7-5 6-5s6 1.7 6 5"/></symbol>
+<symbol id="i-shikkou" viewBox="0 0 20 20"><path d="M3 17h4v-4h4V9h4V5h2"/></symbol>
+<symbol id="i-setsubi" viewBox="0 0 20 20"><path d="M6.4 17.2v-7l1.7-2.2h3.8l1.7 2.2v7z"/><path d="M9.1 8V5.2h1.8V8"/><path d="M10.9 6H14.4"/><path d="M14.4 6v3.4c0 1.2-1.2 1.3-1.2 2.5"/></symbol>
+<symbol id="i-knowhow" viewBox="0 0 20 20"><path d="M4 3h8l4 4v10H4z"/><path d="M12 3v4h4"/></symbol>
+<symbol id="i-memo" viewBox="0 0 20 20"><path d="M7 4H5v13h10V4h-2"/><rect x="7" y="2.5" width="6" height="3"/><path d="M8 10h4M8 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 20 20"><path d="M3 7h14M3 13h14"/><circle cx="7" cy="7" r="2"/><circle cx="13" cy="13" r="2"/></symbol>
+<symbol id="i-law" viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="13"/><path d="M6 8h8M6 11h8M6 14h5"/></symbol>
+<symbol id="i-cycle" viewBox="0 0 20 20"><path d="M16.2 10a6.2 6.2 0 1 1-1.9-4.5"/><path d="M11.4 3.4 14.7 5.7 12.4 9"/></symbol>
+<symbol id="i-timeline" viewBox="0 0 20 20"><path d="M3 10h13"/><path d="M13.5 6.5 17 10l-3.5 3.5"/><circle cx="6" cy="10" r="2"/></symbol>
+<symbol id="i-print" viewBox="0 0 20 20"><path d="M6 8V3h8v5"/><path d="M6 15H3V8h14v7h-3"/><path d="M6 12h8v5H6z"/></symbol>
+<symbol id="i-check" viewBox="0 0 20 20"><path d="m4 10.5 4 4L16 6"/></symbol>
+<symbol id="i-warn" viewBox="0 0 20 20"><path d="M10 3 18 17H2z"/><path d="M10 8v4"/><path d="M10 14.6h0" stroke-linecap="round"/></symbol>
+<symbol id="i-external" viewBox="0 0 20 20"><path d="M11 3h6v6"/><path d="M17 3 9.5 10.5"/><path d="M15 12v5H3V5h5"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 20 20"><path d="M3 10h12"/><path d="m11 6 4 4-4 4"/></symbol>
+<symbol id="i-checklist" viewBox="0 0 20 20"><path d="m3 6 2 2 3-3"/><path d="m3 14 2 2 3-3"/><path d="M11 7h6M11 15h6"/></symbol>
+<symbol id="i-ai" viewBox="0 0 20 20"><path d="M3 4h14v9H8.5L5 16.5V13H3z"/><path d="M7.5 8.5h0M10 8.5h0M12.5 8.5h0" stroke-linecap="round"/></symbol>
+<symbol id="i-export" viewBox="0 0 20 20"><path d="M10 3v9"/><path d="m6.5 8.5 3.5 3.5 3.5-3.5"/><path d="M4 14v3h12v-3"/></symbol>
+<symbol id="i-import" viewBox="0 0 20 20"><path d="M10 12V3"/><path d="M6.5 6.5 10 3l3.5 3.5"/><path d="M4 14v3h12v-3"/></symbol>
+<symbol id="i-note" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.4"/><path d="M10 6.6h0" stroke-linecap="round"/></symbol>
+</defs></svg>
+
 
 <!-- ============ 起動画面 ============ -->
 <div id="app-loading">
@@ -366,14 +398,14 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
   </header>
 
   <nav class="nav-bar">
-    <button class="nav-tab active" data-mod="shiteki" onclick="showModule('shiteki')"><span class="ico">🔎</span>指摘→根拠</button>
-    <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><span class="ico">📖</span>条文検索</button>
-    <button class="nav-tab" data-mod="boka" onclick="showModule('boka')"><span class="ico">👤</span>防火管理者</button>
-    <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><span class="ico">⚖️</span>執行手続き</button>
-    <button class="nav-tab" data-mod="setsubi" onclick="showModule('setsubi')"><span class="ico">🧯</span>設備判定</button>
-    <button class="nav-tab" data-mod="knowhow" onclick="showModule('knowhow')"><span class="ico">💡</span>ノウハウ</button>
-    <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><span class="ico">📝</span>査察メモ</button>
-    <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><span class="ico">⚙️</span>設定</button>
+    <button class="nav-tab active" data-mod="shiteki" onclick="showModule('shiteki')"><svg class="ico"><use href="#i-shiteki"/></svg>指摘</button>
+    <button class="nav-tab" data-mod="jobun" onclick="showModule('jobun')"><svg class="ico"><use href="#i-jobun"/></svg>条文</button>
+    <button class="nav-tab" data-mod="boka" onclick="showModule('boka')"><svg class="ico"><use href="#i-boka"/></svg>管理者</button>
+    <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><svg class="ico"><use href="#i-shikkou"/></svg>執行</button>
+    <button class="nav-tab" data-mod="setsubi" onclick="showModule('setsubi')"><svg class="ico"><use href="#i-setsubi"/></svg>設備</button>
+    <button class="nav-tab" data-mod="knowhow" onclick="showModule('knowhow')"><svg class="ico"><use href="#i-knowhow"/></svg>ノート</button>
+    <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><svg class="ico"><use href="#i-memo"/></svg>メモ</button>
+    <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><svg class="ico"><use href="#i-settings"/></svg>設定</button>
   </nav>
 
   <main class="main">
@@ -383,7 +415,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div class="searchbar">
         <div class="search-input-wrap">
           <textarea id="q-shiteki" placeholder="指摘事項を入力（例：階段に段ボールが積まれ避難に支障がある）" enterkeyhint="search"></textarea>
-          <button class="search-go" onclick="runShiteki()" aria-label="検索">➜</button>
+          <button class="search-go" onclick="runShiteki()" aria-label="検索"><svg class="ico"><use href="#i-arrow"/></svg></button>
         </div>
         <div class="search-hint">自然文でOK。用途区分・延べ面積を入れると絞り込みの精度が上がります。</div>
       </div>
@@ -391,7 +423,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div class="card no-print">
         <div class="row">
           <button class="btn sec sm" onclick="toggleAttrs()" id="attr-toggle-btn">＋ 対象物の属性を入力</button>
-          <button class="btn sec sm" onclick="openChecklist()">☑ よくある指摘から選ぶ</button>
+          <button class="btn sec sm" onclick="openChecklist()"><svg class="mk"><use href="#i-checklist"/></svg>よくある指摘から選ぶ</button>
         </div>
         <div id="attrs" style="display:none">
           <label class="fld" for="yoto">用途区分（令別表第一）</label>
@@ -412,7 +444,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div class="searchbar">
         <div class="search-input-wrap">
           <input type="search" id="q-jobun" placeholder="キーワード / 条番号（例：誘導灯、令26条、法17の3の3）" enterkeyhint="search">
-          <button class="search-go" onclick="runJobun()" aria-label="検索">➜</button>
+          <button class="search-go" onclick="runJobun()" aria-label="検索"><svg class="ico"><use href="#i-arrow"/></svg></button>
         </div>
         <div class="chips" id="law-chips"></div>
       </div>
@@ -511,7 +543,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div id="setsubi-result"></div>
 
       <div class="card">
-        <h3>⏳ 遡及適用（既存不適格）の判定</h3>
+        <h3><svg class="mk"><use href="#i-timeline"/></svg>遡及適用（既存不適格）の判定</h3>
         <div class="muted">基準が改正されたとき、既存の対象物に新しい基準が及ぶかを当たり付けします。
           用途区分は上の「対象物の条件」で選んだものを使います。</div>
         <label class="fld">どちらの筋道か</label>
@@ -539,7 +571,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       </div>
 
       <div class="card">
-        <h3>📅 点検・報告の期限</h3>
+        <h3><svg class="mk"><use href="#i-cycle"/></svg>点検・報告の期限</h3>
         <div class="muted">用途区分は上の「対象物の条件」で選んだものを使います。</div>
         <label class="fld">前回の報告日</label>
         <input type="date" id="tk-last" oninput="runTenken()">
@@ -584,8 +616,8 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
       <div class="card no-print">
         <div class="row">
           <button class="btn sm" onclick="openMemoEditor()">＋ 新しいメモ</button>
-          <button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>
-          <button class="btn sec sm" onclick="exportMemos()">⬇ 書き出し</button>
+          <button class="btn sec sm" onclick="window.print()"><svg class="mk"><use href="#i-print"/></svg>印刷 / PDF</button>
+          <button class="btn sec sm" onclick="exportMemos()"><svg class="mk"><use href="#i-export"/></svg>書き出し</button>
         </div>
         <div class="muted" style="margin-top:8px">
           事業所名・関係者名は仮名（A商店・甲ビル等）で記録することを勧めます。
@@ -652,11 +684,11 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
         <div class="disclaimer">
           査察メモは<strong>この端末のブラウザ内にのみ</strong>保存され、リポジトリには入りません。
           固有名詞や所属固有の運用に触れる記述があるメモには、一覧と編集画面で
-          <strong>⚠ の注意表示</strong>が出ます。書き出し・印刷・同期の前に確認してください。
+          <strong><svg class="mk terra"><use href="#i-warn"/></svg>の注意表示</strong>が出ます。書き出し・印刷・同期の前に確認してください。
         </div>
         <div class="row" style="margin-top:10px">
           <button class="btn sec sm" onclick="openFirebaseSetup()">Firebase同期を設定</button>
-          <button class="btn sec sm" onclick="importMemos()">⬆ 読み込み</button>
+          <button class="btn sec sm" onclick="importMemos()"><svg class="mk"><use href="#i-import"/></svg>読み込み</button>
         </div>
       </div>
 
@@ -1144,6 +1176,12 @@ function searchArticles(raw, opts){
 /* ---------------------------------------------------------------
    描画ヘルパ
    --------------------------------------------------------------- */
+/* 記号は絵文字に頼らず、図面の語彙で描いた線画スプライトから引く。
+   端末ごとの絵文字フォントの差で見え方が変わるのを避ける狙いもある。 */
+function icon(name, cls){
+  return '<svg class="mk' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+}
+
 function esc(s){
   return String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -1197,18 +1235,18 @@ function renderArticle(a, point){
     foot = '<span class="fresh">出典：自治体の例規集（自治体名は非表示）。原典で確認してください</span>' +
            '<span class="fresh">取り込み ' + esc(fmtDate(a.fetched)) + '</span>';
   } else if (a.isAppdx){
-    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + icon('external') + 'e-Gov法令検索で開く</a>' +
            '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
   } else if (a.isKnowhow){
     foot = '<span class="fresh">自分のノート（この端末にのみ保存）</span>' +
            '<span class="fresh">更新 ' + esc(fmtDate(a.fetched)) + '</span>';
   } else if (a.isFdma){
-    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">消防庁の原典PDFを開く ↗</a>' +
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + icon('external') + '消防庁の原典PDFを開く</a>' +
            '<span class="fresh">出典：消防庁' +
            (a.noticeDate ? '／' + esc(a.noticeDate) : '') +
            '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
   } else {
-    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">e-Gov法令検索で開く ↗</a>' +
+    foot = '<a href="' + esc(a.url) + '" target="_blank" rel="noopener">' + icon('external') + 'e-Gov法令検索で開く</a>' +
            '<span class="fresh">施行 ' + esc(a.enforcement) + '／取得 ' + esc(fmtDate(a.fetched)) + '</span>';
   }
 
@@ -1323,11 +1361,11 @@ function runShiteki(){
         html += a ? renderArticle(a, ref.point) :
           '<div class="muted">（未収録：' + esc(ref.law_id) + ' ' + esc(ref.article) + '）</div>';
       }
-      if (e.note) html += '<div class="note">💡 ' + esc(e.note) + '</div>';
+      if (e.note) html += '<div class="note">' + icon('note') + esc(e.note) + '</div>';
       // 自分のノートがあれば条文より先に見せる
       for (const ka of knowhowHitsFor(e, raw)) html += renderArticle(ka, '自分のノート');
       if (e.ordinance){
-        html += '<div class="note">📕 この指摘は火災予防条例に基準が委任されている部分があります。' +
+        html += '<div class="note">' + icon('law','terra') + 'この指摘は火災予防条例に基準が委任されている部分があります。' +
           '所属の条例本文を必ず併せて確認してください。' + ordHint() + '</div>';
         const ordHits = ordinanceHitsFor(e, raw);
         for (const oa of ordHits) html += renderArticle(oa, '条例側の該当箇所（候補）');
@@ -1354,9 +1392,9 @@ function runShiteki(){
   }
 
   html += '<div class="card no-print"><div class="row">' +
-    '<button class="btn sm" onclick="explainShiteki()">🤖 AIで解説を補足</button>' +
-    '<button class="btn sec sm" onclick="memoFromResult()">📝 メモに残す</button>' +
-    '<button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>' +
+    '<button class="btn sm" onclick="explainShiteki()">' + icon('ai') + 'AIで解説を補足</button>' +
+    '<button class="btn sec sm" onclick="memoFromResult()">' + icon('memo') + 'メモに残す</button>' +
+    '<button class="btn sec sm" onclick="window.print()"><svg class="mk"><use href="#i-print"/></svg>印刷 / PDF</button>' +
     '</div><div id="ai-shiteki"></div></div>';
 
   html += '<div class="print-foot">査察AI v4.0／出典：e-Gov法令検索。本資料は判断の補助であり、' +
@@ -1504,8 +1542,8 @@ function runJobun(){
   let html = '<div class="muted" style="margin:4px 0 10px">' + hits.length + '件（上位から表示）</div>';
   html += hits.map(h => renderArticle(h.art)).join('');
   html += '<div class="card no-print"><div class="row">' +
-    '<button class="btn sm" onclick="explainJobun()">🤖 この語句をやさしく解説</button>' +
-    '<button class="btn sec sm" onclick="window.print()">🖨 印刷 / PDF</button>' +
+    '<button class="btn sm" onclick="explainJobun()">' + icon('ai') + 'この語句をやさしく解説</button>' +
+    '<button class="btn sec sm" onclick="window.print()"><svg class="mk"><use href="#i-print"/></svg>印刷 / PDF</button>' +
     '</div><div id="ai-jobun"></div></div>';
   html += '<div class="print-foot">査察AI v4.0／出典：e-Gov法令検索。最終確認は原典で行ってください。</div>';
   box.innerHTML = html;
@@ -1656,7 +1694,7 @@ function renderMemos(){
         (m.yotoLabel ? ' <span class="muted">' + esc(m.yotoLabel.slice(0, 24)) + '</span>' : '') + '</div>' +
       '</div><div class="date">' + esc(m.date) + '</div></div>' +
       '<div class="txt">' + esc(m.text) + '</div>' +
-      (m.refs ? '<div class="refs">📘 ' + esc(m.refs) + '</div>' : '') +
+      (m.refs ? '<div class="refs">' + icon('law') + esc(m.refs) + '</div>' : '') +
       (hits.length ? attnBlock(hits) : '') +
       '<div class="acts no-print">' +
         '<button class="btn sec sm" onclick="openMemoEditor(\'' + m.id + '\')">編集</button>' +
@@ -1666,7 +1704,7 @@ function renderMemos(){
   }).join('');
 
   const summary = flaggedCount
-    ? '<div class="attn-sum">⚠ <strong>' + flaggedCount + '件</strong>のメモに、' +
+    ? '<div class="attn-sum">' + icon('warn','terra') + '<strong>' + flaggedCount + '件</strong>のメモに、' +
       '固有名詞や所属固有の運用に触れる記述が見つかりました。<br>' +
       '端末内に置いておく分には問題ありませんが、<strong>書き出し・印刷・同期で外に出るとき</strong>は' +
       '内容をご確認ください。立入検査で知り得た関係者の秘密は、みだりに他に漏らしてはなりません' +
@@ -1677,7 +1715,7 @@ function renderMemos(){
 }
 
 function attnBlock(hits){
-  return '<div class="attn no-print"><strong>⚠ 共有前に確認</strong>' +
+  return '<div class="attn no-print"><strong>' + icon('warn','terra') + '共有前に確認</strong>' +
     '（自動判定。端末内に保存する分には支障ありません）<br>' +
     hits.slice(0, 10).map(h => '<span class="tok">' + esc(h.token) + '｜' + esc(h.label) + '</span>').join('') +
     '</div>';
@@ -1775,7 +1813,7 @@ function clearApiKey(){
 }
 function updateApiStatus(){
   document.getElementById('api-status').textContent =
-    getApiKey() ? '✅ 登録済み（AI解説が使えます）' : '未登録（ローカル検索のみで動作します）';
+    getApiKey() ? icon('check','sage') + '登録済み（AI解説が使えます）' : '未登録（ローカル検索のみで動作します）';
 }
 
 /* ---------------------------------------------------------------
@@ -2108,18 +2146,18 @@ function updateSyncStatus(extra){
   if (Sync.enabled){
     const flagged = getMemos().filter(m => detectSensitiveMemo(memoSensitiveText(m)).length).length;
     const err = Sync.lastError;
-    el.innerHTML = '✅ Firebaseと同期中（査察メモとノウハウノート）' +
+    el.innerHTML = icon('check','sage') + 'Firebaseと同期中（査察メモとノウハウノート）' +
       (Sync.lastSyncedAt && !err
         ? '<div class="muted">最終同期 ' + esc(Sync.lastSyncedAt.toLocaleTimeString('ja-JP')) + '</div>' : '') +
       (err
-        ? '<div class="attn"><strong>⚠ 同期に失敗しています</strong><br>' + esc(err.slice(0, 160)) +
+        ? '<div class="attn"><strong>' + icon('warn','terra') + '同期に失敗しています</strong><br>' + esc(err.slice(0, 160)) +
           '<br>' + esc(syncHint(err)) + '</div>'
         : '') +
       '<div class="row" style="margin-top:8px">' +
         '<button class="btn sec sm" onclick="runSyncTest()">接続を確認</button>' +
         '<button class="btn sec sm" onclick="runSyncPull()">今すぐ取得</button>' +
       '</div>' +
-      (flagged ? '<div class="attn">⚠ 同期対象のうち<strong>' + flagged + '件</strong>に固有名詞や' +
+      (flagged ? '<div class="attn">' + icon('warn','terra') + '同期対象のうち<strong>' + flagged + '件</strong>に固有名詞や' +
         '所属固有の記述があります。クラウドに保存されている状態です。</div>' : '');
   }
   else if (Sync.getConfig()) el.textContent = 'Firebase設定済み・未ログインです。' + (extra || '');
@@ -2457,7 +2495,7 @@ function renderShokaki(yoto, area, kouzou, nanen, denki, kaki, fc){
     if (kouMatches(g.kou, yoto)){ gimu = g; break; }
   }
 
-  let html = '<div class="card"><h3>🧯 消火器具</h3>';
+  let html = '<div class="card"><h3><svg class="mk"><use href="#i-setsubi"/></svg>消火器具</h3>';
   if (!gimu){
     html += '<div class="muted">この用途は令第10条第1項第1号〜第3号の一覧に見当たりません。' +
       '少量危険物・指定可燃物の有無（第4号）、地階・無窓階・3階以上の階（第5号）で判断してください。</div>';
@@ -3213,7 +3251,7 @@ function renderKnowhow(){
           (k.tags ? '<span class="muted"> ' + esc(k.tags) + '</span>' : '') + '</div>' : '') +
       '</div><div class="date">' + esc(fmtDate(k.updatedAt)) + '</div></div>' +
       '<div class="txt">' + esc(k.body) + '</div>' +
-      (k.refs ? '<div class="refs">📘 ' + esc(k.refs) + '</div>' : '') +
+      (k.refs ? '<div class="refs">' + icon('law') + esc(k.refs) + '</div>' : '') +
       (k.source ? '<div class="crumbs">出典メモ：' + esc(k.source) + '</div>' : '') +
       (hits.length ? attnBlock(hits) : '') +
       '<div class="acts no-print">' +
@@ -3489,7 +3527,7 @@ function renderRefList(refs){
     const a = findArticle(r.law_id, r.article);
     if (!a) return '';
     return '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="reflink">' +
-      esc(a.short) + esc(a.title) + (r.point ? '（' + esc(r.point) + '）' : '') + ' ↗</a>';
+      esc(a.short) + esc(a.title) + (r.point ? '（' + esc(r.point) + '）' : '') + '</a>';
   }).filter(Boolean);
   return items.length ? '<div class="kv" style="margin-top:8px">' + items.join('') + '</div>' : '';
 }
@@ -3521,7 +3559,7 @@ function showFlow(id){
     html += '<div class="stage">' +
       '<div class="sname">' + esc(st.name) + '</div>' +
       '<div class="sdesc">' + esc(st.desc) + '</div>' +
-      (st.caution ? '<div class="scaution">⚠ ' + esc(st.caution) + '</div>' : '') +
+      (st.caution ? '<div class="scaution">' + icon('warn','terra') + esc(st.caution) + '</div>' : '') +
       renderRefList(st.refs) +
       renderManualLinks(flow.manual, st.keywords) +
       '</div>';
@@ -3553,7 +3591,7 @@ function renderManualLinks(manualId, keywords){
   return '<div class="kv" style="margin-top:8px">' +
     scored.slice(0, 3).map(x =>
       '<a href="' + esc(x.a.url) + '" target="_blank" rel="noopener" class="reflink">' +
-      '📘 ' + esc(x.a.lawTitle) + ' ' + esc(x.a.title) + ' ↗</a>').join('') + '</div>';
+      icon('law') + esc(x.a.lawTitle) + ' ' + esc(x.a.title) + '</a>').join('') + '</div>';
 }
 
 function renderFdmaStatus(){
