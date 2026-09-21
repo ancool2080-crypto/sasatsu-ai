@@ -104,6 +104,16 @@ def main():
         counts["用語辞書"] = "{}語 / {}参照".format(
             len(syn["entries"]), sum(len(e.get("refs", [])) for e in syn["entries"]))
 
+    # タブごとの関係法令リンク
+    rl = load(root, "data/reflinks.json")
+    if rl:
+        n = 0
+        for tab, block in rl["tabs"].items():
+            for g in block["groups"]:
+                check_refs(laws, g["items"], "関係法令/{}/{}".format(tab, g["title"]), problems)
+                n += len(g["items"])
+        counts["関係法令"] = "{}タブ / {}項目".format(len(rl["tabs"]), n)
+
     # 遡及適用
     sk = load(root, "data/sokyu.json")
     if sk:

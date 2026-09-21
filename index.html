@@ -150,6 +150,22 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 .badge.ord{background:var(--bark)}
 .badge.fdma{background:var(--sage)}
 .badge.note{background:var(--ochre)}
+.bnitem{border:1px solid var(--mist);border-radius:var(--radius-sm);padding:10px 11px;margin-top:10px;background:var(--warm-white)}
+.bnitem-h{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bnitem-n{width:20px;height:20px;border-radius:50%;background:var(--sage);color:#fff;
+  font-size:11px;display:flex;align-items:center;justify-content:center;flex:none}
+.bnitem-l{flex:1;font-size:12.5px;font-weight:700;color:var(--ink)}
+.refgroup{border-top:1px solid var(--mist);padding:10px 0}
+.refgroup:first-of-type{border-top:none;padding-top:2px}
+.refgroup-t{font-size:11.5px;color:var(--bark-light);margin-bottom:6px}
+.refgroup-i{display:flex;flex-wrap:wrap;gap:6px}
+.reflink{display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+  background:var(--warm-white);border:1px solid var(--mist);border-radius:var(--radius-sm);
+  padding:6px 10px;cursor:pointer;font-family:var(--font-sans);text-align:left;
+  transition:border-color .15s,background .15s}
+.reflink:hover{border-color:var(--sage-light);background:var(--cream)}
+.reflink-n{font-size:12.5px;font-weight:700;color:var(--sage-dark);white-space:nowrap}
+.reflink-p{font-size:10.5px;color:var(--bark-light)}
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:6px}
 .tbl{border-collapse:collapse;font-size:12px;min-width:100%}
 .tbl th,.tbl td{border:1px solid var(--mist);padding:5px 7px;vertical-align:top;text-align:left;line-height:1.7}
@@ -379,6 +395,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
 <symbol id="i-export" viewBox="0 0 20 20"><path d="M10 3v9"/><path d="m6.5 8.5 3.5 3.5 3.5-3.5"/><path d="M4 14v3h12v-3"/></symbol>
 <symbol id="i-import" viewBox="0 0 20 20"><path d="M10 12V3"/><path d="M6.5 6.5 10 3l3.5 3.5"/><path d="M4 14v3h12v-3"/></symbol>
 <symbol id="i-note" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.4"/><path d="M10 6.6h0" stroke-linecap="round"/></symbol>
+<symbol id="i-bunan" viewBox="0 0 20 20"><path d="M15 4H4v13h8"/><path d="M7 8h5M7 11h4"/><path d="m17 10.5-4.5 4.5-2.2.5.5-2.2 4.5-4.5z"/></symbol>
 </defs></svg>
 
 
@@ -404,6 +421,7 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
     <button class="nav-tab" data-mod="shikkou" onclick="showModule('shikkou')"><svg class="ico"><use href="#i-shikkou"/></svg>執行</button>
     <button class="nav-tab" data-mod="setsubi" onclick="showModule('setsubi')"><svg class="ico"><use href="#i-setsubi"/></svg>設備</button>
     <button class="nav-tab" data-mod="knowhow" onclick="showModule('knowhow')"><svg class="ico"><use href="#i-knowhow"/></svg>ノート</button>
+    <button class="nav-tab" data-mod="bunan" onclick="showModule('bunan')"><svg class="ico"><use href="#i-bunan"/></svg>文案</button>
     <button class="nav-tab" data-mod="memo" onclick="showModule('memo')"><svg class="ico"><use href="#i-memo"/></svg>メモ</button>
     <button class="nav-tab" data-mod="settings" onclick="showModule('settings')"><svg class="ico"><use href="#i-settings"/></svg>設定</button>
   </nav>
@@ -607,6 +625,46 @@ textarea.f{min-height:70px;line-height:1.7;resize:vertical}
     </section>
 
     <!-- ============ F2 査察メモ ============ -->
+<!-- ============ 文案作成 ============ -->
+    <section id="mod-bunan" class="module">
+      <div class="card">
+        <h3>立入検査結果通知書の文案</h3>
+        <div class="muted">不備事項欄に書く文章の下書きを作ります。
+          立入検査標準マニュアル第５の様式例６に沿った形です。</div>
+        <div class="disclaimer">
+          通知書は<strong>行政指導</strong>であり、是正を強制するものではありません（立入検査標準マニュアル）。
+          文案は下書きです。事実関係と条項の確定、所属の様式への当てはめは起案者が行ってください。
+        </div>
+
+        <div class="row2">
+          <div>
+            <label class="fld">立入検査日</label>
+            <input type="date" id="bn-date" oninput="runBunan()">
+          </div>
+          <div>
+            <label class="fld">報告期限</label>
+            <input type="date" id="bn-limit" oninput="runBunan()">
+          </div>
+        </div>
+        <label class="fld">消防対象物の名称</label>
+        <input type="text" id="bn-name" placeholder="例：A商店ビル（仮名で下書きし、清書時に実名へ）" oninput="runBunan()">
+        <label class="fld">所在地</label>
+        <input type="text" id="bn-addr" placeholder="下書き段階では空欄でも構いません" oninput="runBunan()">
+        <label class="fld">立会者（職・氏名）</label>
+        <input type="text" id="bn-tachiai" placeholder="例：総務部長" oninput="runBunan()">
+      </div>
+
+      <div class="card">
+        <h3>不備事項</h3>
+        <div class="muted">指摘を選ぶと、文案と根拠条項が入ります。場所や設備名は自分で埋めてください。</div>
+        <label class="fld">指摘を追加</label>
+        <select id="bn-add" onchange="addBunanItem(this.value)"></select>
+        <div id="bn-items"></div>
+      </div>
+
+      <div id="bunan-result"></div>
+    </section>
+
     <section id="mod-memo" class="module">
       <div class="searchbar">
         <div class="search-input-wrap">
@@ -769,6 +827,8 @@ async function boot(){
     DB.sokyu = await getJSON('data/sokyu.json').catch(() => null);
     DB.tenken = await getJSON('data/tenken.json').catch(() => null);
     DB.jinin = await getJSON('data/jinin.json').catch(() => null);
+    DB.reflinks = await getJSON('data/reflinks.json').catch(() => null);
+    DB.bunrei = await getJSON('data/bunrei.json').catch(() => null);
     DB.boka = await getJSON('data/boka_kanri.json').catch(() => null);
     DB.enf  = await getJSON('data/enforcement.json').catch(() => null);
 
@@ -1048,7 +1108,13 @@ const LAW_ALIAS = [
 
 /** 「令10条」「消防法第17条の3の3」「規則23」等を拾う */
 function parseArticleQuery(raw){
-  const q = (raw || '').normalize('NFKC').replace(/[\s　]/g, '');
+  // 「令第十条」も「令26条」も同じように引けるようにする。
+  // 条例は算用数字、法令は漢数字で書かれているので、どちらも打たれる。
+  const q = (raw || '').normalize('NFKC').replace(/[\s　]/g, '')
+    .replace(/第([〇零一二三四五六七八九十百千]+)条/g,
+             (mm, g) => { const n = kanjiNumToArabic(g); return n === null ? mm : '第' + n + '条'; })
+    .replace(/の([〇零一二三四五六七八九十百千]+)/g,
+             (mm, g) => { const n = kanjiNumToArabic(g); return n === null ? mm : 'の' + n; });
   const m = /(第?)(\d+)条?((?:の\d+)*)/.exec(q);
   if (!m) return null;
   const head = q.slice(0, m.index);
@@ -1117,8 +1183,27 @@ function synonymLookup(raw){
   return { terms, refs, words };
 }
 
+/* 「令別表第二」のような別表の指定は、条番号と同じく一意に決まる。
+   語句検索に流すと、件名にその語を含む通知に負けてしまうので、
+   条番号と同じ扱いで直接引き当てる。 */
+function parseAppdxQuery(raw){
+  const q = normalize(raw);
+  const m = /^(.*?)(別表第[〇一二三四五六七八九十0-9]+(?:の[〇一二三四五六七八九十0-9]+)?)$/.exec(q);
+  if (!m) return null;
+  const shortName = m[1];
+  const title = m[2];
+  const hits = DB.articles.filter(a =>
+    a.isAppdx && normalize(a.title) === title &&
+    (!shortName || normalize(a.short) === shortName));
+  return hits.length ? hits : null;
+}
+
 function searchArticles(raw, opts){
+
   opts = opts || {};
+  const appdxHits = parseAppdxQuery(raw);
+  if (appdxHits) return appdxHits.map(a => ({ art: a, score: 1000 }));
+
   const spec = parseArticleQuery(raw);
   if (spec){
     const hits = DB.articles.filter(a => matchArticleNumber(a, spec));
@@ -2453,6 +2538,7 @@ function runSetsubi(){
   html += renderShokaki(yoto, area, kouzou, nanen, denki, kaki, floorCond);
   html += renderSetsubiList(yoto, area, floors);
   html += renderShuyouJinin(yoto);
+  html += renderRefLinks('setsubi');
   box.innerHTML = html;
   runSokyu();
   runTenken();
@@ -3194,6 +3280,320 @@ function runJinin(){
 }
 
 /* =====================================================================
+   関係法令・別表への入口
+   判定結果を見たあとに「では条文はどこか」と辿るのが実務の動きなので、
+   そのタブで使う条と別表をまとめて置く。基準が別表にしかないものが
+   多いため、条と別表を分けずに並べる。
+   ===================================================================== */
+function jumpToRef(lawId, article, appdx){
+  showModuleByName('jobun');
+  const q = appdx ? (shortOf(lawId) + appdx) : (shortOf(lawId) + article);
+  document.getElementById('q-jobun').value = q;
+  runJobun();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderRefLinks(tab){
+  const block = DB.reflinks && DB.reflinks.tabs[tab];
+  if (!block) return '';
+  return '<div class="card"><h3>' + esc(block.label) + '</h3>' +
+    block.groups.map(g =>
+      '<div class="refgroup">' +
+        '<div class="refgroup-t">' + esc(g.title) + '</div>' +
+        '<div class="refgroup-i">' + g.items.map(it => {
+          const name = it.label || (shortOf(it.law_id) + (it.appdx || it.article));
+          const arg = "'" + it.law_id + "','" + (it.article || '') + "','" + (it.appdx || '') + "'";
+          return '<button class="reflink" onclick="jumpToRef(' + arg + ')">' +
+            '<span class="reflink-n">' + esc(name) + '</span>' +
+            (it.point ? '<span class="reflink-p">' + esc(it.point) + '</span>' : '') +
+            '</button>';
+        }).join('') + '</div>' +
+      '</div>').join('') +
+    '<div class="muted" style="margin-top:8px">押すと条文検索タブで開きます。</div></div>';
+}
+
+/* =====================================================================
+   立入検査結果通知書の文案
+   通知書は行政指導であって是正を強制するものではない（立入検査標準マニュアル）。
+   だから文は「事実を述べ、求める措置を添える」形に揃え、命令口調にしない。
+   根拠条項は指摘辞書から機械的に引き、番号の書き方だけ通知書の流儀に直す。
+   ===================================================================== */
+const BUNAN_KEY = 'sst_bunan';
+let bunanItems = [];
+
+function initBunan(){
+  const sel = document.getElementById('bn-add');
+  if (!sel || !DB.findings || !DB.bunrei) return;
+  const avail = DB.findings.entries.filter(e => DB.bunrei.items[e.id]);
+  sel.innerHTML = '<option value="">選んでください</option>' +
+    avail.map(e => '<option value="' + esc(e.id) + '">' + esc(e.label.slice(0, 40)) + '</option>').join('');
+  try {
+    const saved = JSON.parse(localStorage.getItem(BUNAN_KEY) || 'null');
+    if (saved){
+      bunanItems = saved.items || [];
+      for (const [k, v] of Object.entries(saved.fields || {})){
+        const el = document.getElementById(k);
+        if (el) el.value = v;
+      }
+    }
+  } catch (e){ /* 壊れていたら空で始める */ }
+  renderBunanItems();
+}
+
+function bunanFields(){
+  const o = {};
+  for (const id of ['bn-date','bn-limit','bn-name','bn-addr','bn-tachiai']){
+    const el = document.getElementById(id);
+    if (el) o[id] = el.value;
+  }
+  return o;
+}
+
+function saveBunan(){
+  try {
+    localStorage.setItem(BUNAN_KEY, JSON.stringify({ fields: bunanFields(), items: bunanItems }));
+  } catch (e){ /* 容量超過などは黙って諦める */ }
+}
+
+function addBunanItem(id){
+  document.getElementById('bn-add').value = '';
+  if (!id) return;
+  const b = DB.bunrei.items[id];
+  if (!b) return;
+  bunanItems.push({ id: id, text: b.fact, place: '', name: '' });
+  renderBunanItems();
+  runBunan();
+}
+
+function removeBunanItem(i){
+  bunanItems.splice(i, 1);
+  renderBunanItems();
+  runBunan();
+}
+
+/* 同じ不備でも、未設置なのか機能不良なのかで書き方が変わる。
+   よくある二通りを行き来できるようにしておく。 */
+function useAltText(i){
+  const it = bunanItems[i];
+  const b = DB.bunrei.items[it.id];
+  if (!b || !b.fact_alt) return;
+  it.text = ((it.text || '').trim() === b.fact_alt) ? b.fact : b.fact_alt;
+  renderBunanItems();
+  runBunan();
+}
+
+function onBunanEdit(i, field, val){
+  bunanItems[i][field] = val;
+  runBunan();
+}
+
+function renderBunanItems(){
+  const box = document.getElementById('bn-items');
+  if (!box) return;
+  if (!bunanItems.length){
+    box.innerHTML = '<div class="empty">まだ指摘がありません。上の一覧から追加してください。</div>';
+    return;
+  }
+  box.innerHTML = bunanItems.map(function(it, i){
+    const e = DB.findings.entries.find(x => x.id === it.id) || { label: it.id, refs: [] };
+    const b = DB.bunrei.items[it.id] || {};
+    const needsPlace = /\{場所\}/.test(b.fact || '') || /\{場所\}/.test(b.fact_alt || '');
+    const needsName = /\{設備名\}|\{物品名\}/.test((b.fact || '') + (b.fact_alt || ''));
+    return '<div class="bnitem">' +
+      '<div class="bnitem-h"><span class="bnitem-n">' + (i + 1) + '</span>' +
+        '<span class="bnitem-l">' + esc(e.label.slice(0, 32)) + '</span>' +
+        '<button class="btn sec sm" onclick="removeBunanItem(' + i + ')">削除</button></div>' +
+      '<textarea class="f" rows="2" oninput="onBunanEdit(' + i + ',&quot;text&quot;,this.value)">' +
+        esc(it.text) + '</textarea>' +
+      (needsPlace || needsName ? '<div class="row2" style="margin-top:6px">' +
+        (needsPlace ? '<div><input type="text" placeholder="場所（例：2階廊下）" value="' + esc(it.place) +
+          '" oninput="onBunanEdit(' + i + ',&quot;place&quot;,this.value)"></div>' : '<div></div>') +
+        (needsName ? '<div><input type="text" placeholder="設備名・物品名" value="' + esc(it.name) +
+          '" oninput="onBunanEdit(' + i + ',&quot;name&quot;,this.value)"></div>' : '<div></div>') +
+        '</div>' : '') +
+      (b.fact_alt ? '<button class="btn sec sm" style="margin-top:6px" onclick="useAltText(' + i + ')">別の言い回しにする</button>' : '') +
+      '<div class="muted" style="margin-top:6px">根拠：' + esc(refsToText(e.refs)) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+/* 条文データの見出しは漢数字だが、通知書には算用数字で書くのが通例 */
+function articleToArabic(title){
+  const n = parseArticleNumber(title);
+  if (!n) return title;
+  return '第' + n.n + '条' + n.br.map(b => 'の' + b).join('');
+}
+
+/* point に「第1項」のような項の指定が入っていれば拾って添える */
+function refPointSuffix(point){
+  if (!point) return '';
+  const m = /第\d+項(?:[・、]第\d+項)*/.exec(point);
+  return m ? m[0] : '';
+}
+
+/* 指摘辞書の参照には、次の段階として見る命令の条文も混ざっている。
+   通知書は行政指導なので、命令・公示・告発・代執行の条文を
+   不備事項の根拠として並べると筋が違う。文案からは外す。 */
+function isEnforcementRef(r){
+  return /命令|公示|告発|代執行|使用禁止/.test(r.point || '');
+}
+
+function refsToText(refs, opts){
+  const forDraft = !opts || opts.forDraft !== false;
+  const seen = new Set();
+  const parts = [];
+  for (const r of refs || []){
+    if (forDraft && isEnforcementRef(r)) continue;
+    const txt = shortOf(r.law_id) + articleToArabic(r.article) + refPointSuffix(r.point);
+    if (seen.has(txt)) continue;
+    seen.add(txt);
+    parts.push(txt);
+  }
+  return parts.join('、');
+}
+
+function fmtJpDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return iso;
+  return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function buildBunanText(){
+  const f = bunanFields();
+  const fmt = v => v ? fmtJpDate(v) : '　　年　　月　　日';
+  const honbun = DB.bunrei.honbun.text.replace('{検査日}', fmt(f['bn-date']));
+  const bikou = DB.bunrei.bikou.text.replace('{報告期限}', fmt(f['bn-limit']));
+
+  const lines = bunanItems.map(function(it, i){
+    const e = DB.findings.entries.find(x => x.id === it.id) || { refs: [] };
+    const b = DB.bunrei.items[it.id] || {};
+    const t = (it.text || '')
+      .replace(/\{場所\}/g, it.place || '（場所）')
+      .replace(/\{設備名\}/g, it.name || '（設備名）')
+      .replace(/\{物品名\}/g, it.name || '（物品名）');
+    return (i + 1) + '　' + t +
+      (b.zesei ? '\n　　' + b.zesei : '') +
+      '\n　　（根拠：' + refsToText(e.refs) + '）';
+  });
+
+  const head =
+    (f['bn-name'] ? '消防対象物　名称　' + f['bn-name'] + '\n' : '') +
+    (f['bn-addr'] ? '消防対象物　所在地　' + f['bn-addr'] + '\n' : '') +
+    (f['bn-tachiai'] ? '立会者（職・氏名）　' + f['bn-tachiai'] + '\n' : '');
+
+  return (head ? head + '\n' : '') + honbun +
+    '\n\n【不備事項】\n' + lines.join('\n\n') +
+    '\n\n【備考】\n' + bikou;
+}
+
+function runBunan(){
+  const box = document.getElementById('bunan-result');
+  if (!box || !DB.bunrei) return;
+  saveBunan();
+
+  if (!bunanItems.length){
+    box.innerHTML = '<div class="empty">指摘を追加すると文案ができます。</div>';
+    return;
+  }
+
+  const f = bunanFields();
+  const hits = detectSensitiveMemo([f['bn-name'], f['bn-addr'], f['bn-tachiai']].filter(Boolean).join('\n'));
+
+  box.innerHTML =
+    '<div class="card"><h3>文案</h3>' +
+    '<textarea class="f" id="bn-draft" style="min-height:280px;font-size:12.5px;line-height:1.9">' +
+      esc(buildBunanText()) + '</textarea>' +
+    '<div class="row" style="margin-top:10px">' +
+      '<button class="btn sm" onclick="copyBunan()">コピー</button>' +
+      '<button class="btn sec sm" onclick="window.print()">' + icon('print') + '印刷 / PDF</button>' +
+      '<button class="btn sec sm" onclick="bunanToMemo()">' + icon('memo') + '査察メモへ</button>' +
+      (getApiKey() ? '<button class="btn sec sm" onclick="refineBunan()">' + icon('ai') + '表現を整える</button>' : '') +
+      '<button class="btn sec sm" onclick="clearBunan()">全部消す</button>' +
+    '</div>' +
+    (hits.length ? attnBlock(hits) : '') +
+    '<div class="muted" style="margin-top:8px">' + esc(DB.bunrei.honbun.note) + '</div>' +
+    '</div>' +
+    '<div id="bn-ai"></div>' +
+    renderBunanSource();
+}
+
+/* 文案の出どころを示す。様式そのものを見たくなる場面が必ずあるため。 */
+function renderBunanSource(){
+  const src = DB.bunrei.source;
+  const doc = DB.fdma && (DB.fdma.documents || []).find(d => d.title.indexOf('立入検査') >= 0);
+  if (!doc) return '';
+  const a = DB.articles.find(x => x.isFdma && x.lawId === 'fdma:' + doc.id && x.title === 'P.' + src.page);
+  if (!a) return '';
+  return '<div class="card"><h3>文案の土台</h3>' +
+    '<div class="muted">' + esc(src.doc) + '　' + esc(src.label) + '</div>' +
+    renderArticle(a, '様式例') + '</div>';
+}
+
+function copyBunan(){
+  const el = document.getElementById('bn-draft');
+  if (!el) return;
+  navigator.clipboard.writeText(el.value)
+    .then(() => toast('コピーしました'))
+    .catch(() => { el.select(); toast('選択しました。手元でコピーしてください'); });
+}
+
+function clearBunan(){
+  if (!confirm('入力した内容と指摘を全部消します。よろしいですか？')) return;
+  bunanItems = [];
+  for (const id of ['bn-date','bn-limit','bn-name','bn-addr','bn-tachiai']){
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }
+  localStorage.removeItem(BUNAN_KEY);
+  renderBunanItems();
+  runBunan();
+}
+
+function bunanToMemo(){
+  const f = bunanFields();
+  const list = getMemos();
+  list.unshift({
+    id: 'm' + Date.now(),
+    name: f['bn-name'] || '（対象物名なし）',
+    date: f['bn-date'] || new Date().toISOString().slice(0, 10),
+    text: bunanItems.map((it, i) => (i + 1) + ' ' + it.text).join('\n'),
+    refs: [...new Set(bunanItems.map(function(it){
+      const e = DB.findings.entries.find(x => x.id === it.id);
+      return e ? refsToText(e.refs) : '';
+    }).filter(Boolean))].join('／'),
+    status: 'open',
+    updatedAt: new Date().toISOString()
+  });
+  setMemos(list);
+  toast('査察メモに保存しました');
+}
+
+async function refineBunan(){
+  const el = document.getElementById('bn-draft');
+  const box = document.getElementById('bn-ai');
+  if (!el || !box) return;
+  const f = bunanFields();
+  const prompt =
+    '次は、日本の消防本部が交付する立入検査結果通知書の「不備事項」欄の下書きです。\n' +
+    '通知書は行政指導であり是正を強制するものではないため、命令口調にはしないでください。\n' +
+    '事実の記述と求める措置が分かれているか、日本語として不自然な箇所がないかを見て、' +
+    '整えた文面だけを返してください。条項番号は変更しないでください。\n\n' + el.value;
+
+  const userText = [f['bn-name'], f['bn-addr'], f['bn-tachiai'], el.value].filter(Boolean).join('\n');
+  if (!await confirmSend(prompt, userText)) return;
+
+  box.innerHTML = '<div class="ai"><span class="lbl">推敲中</span>整えています…</div>';
+  try {
+    const text = await askClaude(prompt);
+    box.innerHTML = '<div class="card"><h3>整えた案</h3>' +
+      '<textarea class="f" style="min-height:240px;font-size:12.5px;line-height:1.9">' + esc(text) + '</textarea>' +
+      '<div class="muted" style="margin-top:6px">元の文案は上に残してあります。採否はご自身で判断してください。</div></div>';
+  } catch (e){
+    box.innerHTML = '<div class="disclaimer">整えられませんでした：' + esc(e.message) + '</div>';
+  }
+}
+
+/* =====================================================================
    ノウハウノート
    市販の実務書で調べたことを自分の言葉で残す場所。端末内にのみ保存し、
    検索と「指摘→根拠」の結果にも自分のノートが出るようにする。
@@ -3513,6 +3913,8 @@ function runBoka(){
       renderRefList(f.refs) + '</div>').join('') +
     '</div>';
 
+  html += renderRefLinks('boka');
+
   html += '<div class="disclaimer">この判定は令別表第一の項・収容人員・延べ面積だけから機械的に出したものです。' +
     '複合用途における従属的な部分の扱いや、同一敷地内の複数棟の扱いによって結論が変わります。' +
     '最終的な判断は原典と所属の運用で確認してください。</div>';
@@ -3651,6 +4053,8 @@ function initUI(){
   runTenken();
   refreshKnowhowIndex();
   renderKnowhow();
+  initBunan();
+  runBunan();
   renderFlowChips();
   if (DB.enf && DB.enf.flows.length) showFlow(DB.enf.flows[0].id);
 
