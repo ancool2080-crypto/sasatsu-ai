@@ -68,16 +68,10 @@ def main():
     if used - declared:
         problems.append('未定義のCSS変数: {}'.format(sorted(used - declared)))
 
-    # ナビゲーションは DESTS からタブを組み立てるので、
-    # 画面の id とそちらの一覧を突き合わせる
     mods = set(re.findall(r'id="mod-([a-z]+)"', src))
-    tabs = set()
-    for block in re.findall(r'mods:\s*\[(.*?)\]', src, re.S):
-        tabs |= set(re.findall(r"id:'([a-z]+)'", block))
-    if not tabs:
-        tabs = set(re.findall(r'data-mod="([a-z]+)"', src))
+    tabs = set(re.findall(r'data-mod="([a-z]+)"', src))
     if mods != tabs:
-        problems.append('画面とナビの不一致: {}'.format(sorted(mods ^ tabs)))
+        problems.append('タブとモジュールの不一致: {}'.format(sorted(mods ^ tabs)))
 
     node = shutil.which('node')
     if node:

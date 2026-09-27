@@ -251,22 +251,8 @@ scripts/
   build_yoto.py                令別表第一 → 用途区分データ
   anonymize_ordinance.py       条例の自治体名マスキング
   validate_findings_map.py     指摘辞書の参照先の実在チェック
-  build_m3_theme.py            Material Design 3 のトーナルパレットを生成
   build_icons.py               PWAアイコン生成
 ```
-
-### 配色を変える
-
-見た目は Material Design 3 の色の組み立て方に合わせてあります。ソースカラーを一つ決めると、
-そこから5つのトーナルパレットと26のカラーロールが決まるという作りです。
-
-```bash
-python scripts/build_m3_theme.py --seed "#5C7A5F"
-```
-
-`data/m3-theme.json` と `data/m3-theme.css` を書き出し、あわせて前景と背景の
-コントラスト比を表で出します。すべて4.5:1以上であることを確かめてから、
-`index.html` の `<style>` 冒頭にあるロール定義に反映してください。
 
 ## ローカルで動かす
 
